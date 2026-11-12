@@ -4,6 +4,7 @@ use std::sync::OnceLock;
 /// weights: blocks of 256 int8 values with one f32 scale, plus the sums of
 /// every 16 and every 32 values so weight offsets can be applied without
 /// touching `qs`.
+#[derive(Default)]
 pub struct Q8K {
     pub d: Vec<f32>,
     pub qs: Vec<i8>,
@@ -16,32 +17,35 @@ pub const QK_K: usize = 256;
 
 impl Q8K {
     pub fn quantize(x: &[f32]) -> Q8K {
+        let mut q = Q8K::default();
+        q.quantize_into(x);
+        q
+    }
+
+    /// Quantizes `x` into `self`, reusing allocated capacities across calls.
+    pub fn quantize_into(&mut self, x: &[f32]) {
         assert_eq!(
             x.len() % QK_K,
             0,
             "length {} is not a multiple of {QK_K}",
             x.len()
         );
-        let blocks = x.len() / QK_K;
-        let mut q = Q8K {
-            d: Vec::with_capacity(blocks),
-            qs: vec![0; x.len()],
-            bsums: Vec::with_capacity(blocks * 16),
-            bsums32: Vec::with_capacity(blocks * 8),
-            strided: OnceLock::new(),
-        };
-        for (src, dst) in x.chunks_exact(QK_K).zip(q.qs.chunks_exact_mut(QK_K)) {
-            q.d.push(quantize_block(src, dst));
+        self.d.clear();
+        self.bsums.clear();
+        self.bsums32.clear();
+        self.strided.take();
+        self.qs.resize(x.len(), 0);
+        for (src, dst) in x.chunks_exact(QK_K).zip(self.qs.chunks_exact_mut(QK_K)) {
+            self.d.push(quantize_block(src, dst));
             // i32 sums vectorize, 16 values still fit an i16
-            q.bsums.extend(
+            self.bsums.extend(
                 dst.chunks_exact(16)
                     .map(|g| g.iter().map(|&v| v as i32).sum::<i32>() as i16),
             );
-            let sums16 = &q.bsums[q.bsums.len() - 16..];
-            q.bsums32
+            let sums16 = &self.bsums[self.bsums.len() - 16..];
+            self.bsums32
                 .extend(sums16.chunks_exact(2).map(|p| p[0] + p[1]));
         }
-        q
     }
 
     /// `qs` with each run of 128 reordered so value `4i + k` sits at
