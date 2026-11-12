@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="800" height="800">
+  <defs>
+    <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="14" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <radialGradient id="bg-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#c9ff3b" stop-opacity="0.12" />
+      <stop offset="100%" stop-color="#06120d" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="800" height="800" fill="#06120d" />
+  <circle cx="400" cy="400" r="340" fill="url(#bg-glow)" />
+
+  <!-- 4x4 XOR Swizzle Matrix -->
+  <!-- Row 0 -->
+  <rect x="206" y="206" width="76" height="76" rx="16" fill="#c9ff3b" filter="url(#neon-glow)" />
+  <rect x="310" y="206" width="76" height="76" rx="16" fill="#c9ff3b" fill-opacity="0.18" />
+  <rect x="414" y="206" width="76" height="76" rx="16" fill="#c9ff3b" fill-opacity="0.18" />
+  <rect x="518" y="206" width="76" height="76" rx="16" fill="#c9ff3b" filter="url(#neon-glow)" />
+
+  <!-- Row 1 -->
+  <rect x="206" y="310" width="76" height="76" rx="16" fill="#c9ff3b" fill-opacity="0.18" />
+  <rect x="310" y="310" width="76" height="76" rx="16" fill="#c9ff3b" fill-opacity="0.18" />
+  <rect x="414" y="310" width="76" height="76" rx="16" fill="#c9ff3b" filter="url(#neon-glow)" />
+  <rect x="518" y="310" width="76" height="76" rx="16" fill="#c9ff3b" fill-opacity="0.18" />
+
+  <!-- Row 2 -->
+  <rect x="206" y="414" width="76" height="76" rx="16" fill="#c9ff3b" filter="url(#neon-glow)" />
+  <rect x="310" y="414" width="76" height="76" rx="16" fill="#c9ff3b" fill-opacity="0.18" />
+  <rect x="414" y="414" width="76" height="76" rx="16" fill="#c9ff3b" fill-opacity="0.18" />
+  <rect x="518" y="414" width="76" height="76" rx="16" fill="#c9ff3b" fill-opacity="0.18" />
+
+  <!-- Row 3 -->
+  <rect x="206" y="518" width="76" height="76" rx="16" fill="#c9ff3b" fill-opacity="0.18" />
+  <rect x="310" y="518" width="76" height="76" rx="16" fill="#c9ff3b" fill-opacity="0.18" />
+  <rect x="414" y="518" width="76" height="76" rx="16" fill="#c9ff3b" filter="url(#neon-glow)" />
+  <rect x="518" y="518" width="76" height="76" rx="16" fill="#c9ff3b" fill-opacity="0.18" />
+</svg>
+
