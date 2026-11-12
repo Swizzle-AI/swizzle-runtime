@@ -1,4 +1,4 @@
-use kinetic_cuda::{Argmax, Batch, DeviceBuffer, GemvInput, MAX_BATCH};
+use kinetic_cuda::{Argmax, Batch, DeviceBuffer, GemvInput, ShortlistWork, MAX_BATCH};
 
 use super::experts::ExpertWork;
 use super::layer::{CudaLayer, LayerState};
@@ -32,6 +32,7 @@ pub(super) struct Scratch {
     pub joined: Option<GemvInput>,
     pub logits: DeviceBuffer<f32>,
     pub greedy: Argmax,
+    pub shortlist: Option<ShortlistWork>,
     /// Per-layer inputs of every layer, and the token rows they start from.
     pub per_layer: DeviceBuffer<f32>,
     pub per_layer_tokens: DeviceBuffer<f32>,
@@ -179,6 +180,7 @@ impl Work {
                     .transpose()?,
                 logits: f32s(MAX_BATCH * vocab)?,
                 greedy: Argmax::new(ctx, MAX_BATCH, vocab)?,
+                shortlist: None,
                 per_layer: f32s(rows * per_layer)?,
                 per_layer_tokens: f32s(rows * per_layer)?,
             },
@@ -212,7 +214,8 @@ impl Work {
             .sum();
         let layers: usize = self.layers.iter().map(LayerState::size_bytes).sum();
         let experts = self.experts.as_ref().map_or(0, ExpertWork::size_bytes)
-            + self.pass.as_ref().map_or(0, PassRows::size_bytes);
+            + self.pass.as_ref().map_or(0, PassRows::size_bytes)
+            + s.shortlist.as_ref().map_or(0, ShortlistWork::size_bytes);
         4 * (buffers + proj) + inputs + layers + experts
     }
 }

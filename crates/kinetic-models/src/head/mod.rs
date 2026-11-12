@@ -41,6 +41,13 @@ impl Shortlist {
         Some(Shortlist { copy, radii, slack })
     }
 
+    /// Raw Q4_K copy bytes, `[head, spread]` radii pairs, and rounding slack
+    /// for device upload.
+    pub(crate) fn device_parts(&self) -> (&[u8], Vec<(f32, f32)>, f32) {
+        let pairs = self.radii.iter().map(|r| (r.head, r.spread)).collect();
+        (&self.copy, pairs, self.slack as f32)
+    }
+
     /// Logits of `head` for each row of `x`, exact for a set of tokens that
     /// holds the `top` highest of the row and negative infinity elsewhere.
     /// `None` when that set would cost about as much as the full head.

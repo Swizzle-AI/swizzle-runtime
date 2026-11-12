@@ -41,9 +41,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use kinetic_cuda::{
-    Batch, Context, Device, DeviceBuffer, DeviceMatrix, Event, Graph, Kernels, KvType,
-    PinnedBuffer, Stream, MAX_BATCH,
+    pack_radii, Batch, Context, Device, DeviceBuffer, DeviceMatrix, Event, Graph, Kernels, KvType,
+    PinnedBuffer, ShortlistWork, Stream, MAX_BATCH,
 };
+use kinetic_quant::{Matrix, TensorType};
 
 use crate::blocks::{Folding, Moe};
 use crate::convoy::Convoy;
@@ -169,8 +170,16 @@ pub struct CudaModel<'m> {
     spare: Option<RefCell<Spare>>,
     /// The last shared one-token pass recorded, and the states it runs.
     shared_step: RefCell<Option<(Vec<u64>, Graph)>>,
+    /// Compact Q4_K copy + radii for GPU-resident greedy Shortlist.
+    shortlist: Option<CudaShortlist>,
     /// See [`Placement::eager`].
     eager: bool,
+}
+
+struct CudaShortlist {
+    copy: DeviceMatrix,
+    radii: DeviceBuffer<f32>,
+    slack: f32,
 }
 
 /// The token embedding table: on the device, or, in a model whose device
@@ -217,6 +226,7 @@ struct Step {
     graph: Graph,
     greedy: PinnedBuffer<u32>,
     hidden: PinnedBuffer<f32>,
+    has_logits: bool,
 }
 
 /// What a run produces besides the state it advances.
@@ -348,8 +358,12 @@ impl<'m> CudaModel<'m> {
             convoy: Convoy::for_device(),
             spare: None,
             shared_step: RefCell::new(None),
+            shortlist: None,
             eager: placement.eager,
         };
+        if front == 0 && moes.is_none() {
+            cuda.shortlist = build_cuda_shortlist(&cuda.gpu, &model.output, &model.shortlist);
+        }
         if let Some(moes) = moes {
             cuda.offload = Some(RefCell::new(cuda.plan_offload(moes)?));
             if cuda.routes_on_host() {
@@ -699,8 +713,10 @@ impl<'m> CudaModel<'m> {
                 if !embed_on_device {
                     self.embed(&mut state.work, chunk)?;
                 }
-                if state.step.is_none() {
-                    state.step = Some(self.record_step(&mut state.work, chunk, embed_on_device)?);
+                if state.step.as_ref().is_none_or(|s| logits && !s.has_logits) {
+                    state.step = None;
+                    state.step =
+                        Some(self.record_step(&mut state.work, chunk, embed_on_device, logits)?);
                 }
                 if let Some(step) = &state.step {
                     step.graph.launch(&self.gpu.stream)?;
@@ -722,7 +738,7 @@ impl<'m> CudaModel<'m> {
                 self.queue(&mut state.work, chunk, flow)?;
                 for rows in head.iter().flat_map(|r| slices(r.clone())) {
                     let m = rows.len();
-                    self.queue_head(&mut state.work.scratch, rows)?;
+                    self.queue_head(&mut state.work.scratch, rows, logits)?;
                     self.read_head(&state.work.scratch, m, logits, &mut out)?;
                 }
                 let hidden = &mut out.hidden[done * d..][..n * d];
@@ -742,8 +758,13 @@ impl<'m> CudaModel<'m> {
         work: &mut Work,
         token: &[u32],
         embed_on_device: bool,
+        need_logits: bool,
     ) -> kinetic_cuda::Result<Step> {
         let stream = &self.gpu.stream;
+        let use_shortlist = !need_logits && self.shortlist.is_some();
+        if use_shortlist && work.scratch.shortlist.is_none() {
+            work.scratch.shortlist = Some(ShortlistWork::new(&self.gpu.ctx, self.n_vocab())?);
+        }
         let mut greedy = PinnedBuffer::new(&self.gpu.ctx, 1)?;
         let mut hidden = PinnedBuffer::new(&self.gpu.ctx, self.n_embd)?;
         let graph = stream.capture(|| {
@@ -752,7 +773,7 @@ impl<'m> CudaModel<'m> {
             }
             self.queue_layers(work, Flow::Commit)?;
             let s = &mut work.scratch;
-            self.queue_head(s, 0..1)?;
+            self.queue_head(s, 0..1, need_logits)?;
             // SAFETY: the step owns both buffers with its graph, and they are
             // read only after the stream has passed each launch.
             unsafe {
@@ -764,6 +785,7 @@ impl<'m> CudaModel<'m> {
             graph,
             greedy,
             hidden,
+            has_logits: need_logits,
         })
     }
 
@@ -824,13 +846,32 @@ impl<'m> CudaModel<'m> {
 
     /// Queues the output head and its greedy tokens over `rows` rows of the
     /// last pass, at most [`MAX_BATCH`].
-    fn queue_head(&self, s: &mut Scratch, rows: Range<usize>) -> kinetic_cuda::Result<()> {
+    fn queue_head(
+        &self,
+        s: &mut Scratch,
+        rows: Range<usize>,
+        need_logits: bool,
+    ) -> kinetic_cuda::Result<()> {
         let (k, stream) = (&self.gpu.kernels, &self.gpu.stream);
         let (m, vocab) = (rows.len(), self.n_vocab());
         let h = match &self.head_folding {
             Some(f) => f.fold(&self.gpu, &s.h, &mut s.folded, rows.end)?,
             None => &s.h,
         };
+        if !need_logits && m == 1 && rows.start == 0 {
+            if let (Some(sl), Some(work)) = (&self.shortlist, &mut s.shortlist) {
+                return k.shortlist_greedy(
+                    self.head(),
+                    &sl.copy,
+                    &sl.radii,
+                    sl.slack,
+                    h,
+                    work,
+                    &mut s.greedy,
+                    stream,
+                );
+            }
+        }
         k.gemv_rows(self.head(), vocab, h, rows, &mut s.logits, stream)?;
         k.argmax(&s.logits, vocab, m, &mut s.greedy, stream)
     }
@@ -957,4 +998,34 @@ fn routed_experts<'m>(model: &Model<'m>) -> Result<Option<Vec<Moe<'m>>>, LoadErr
 
 fn shape(msg: String) -> kinetic_cuda::Error {
     kinetic_cuda::Error::Shape(msg)
+}
+
+const CUDA_SHORTLIST_MIN_VOCAB: usize = 32_768;
+const CUDA_SHORTLIST_RESERVE: usize = 128 << 20;
+
+fn build_cuda_shortlist(
+    gpu: &Gpu,
+    head: &Matrix,
+    slot: &std::sync::OnceLock<Option<crate::head::Shortlist>>,
+) -> Option<CudaShortlist> {
+    if head.rows < CUDA_SHORTLIST_MIN_VOCAB
+        || !matches!(head.ty, TensorType::Q6K | TensorType::Q8_0)
+        || !head.cols.is_multiple_of(256)
+    {
+        return None;
+    }
+    let copy_bytes = head.rows * (head.cols / 256 * 144);
+    let aux_bytes = head.rows * 24;
+    let (free, _) = gpu.ctx.memory_info().ok()?;
+    if free < copy_bytes + aux_bytes + CUDA_SHORTLIST_RESERVE {
+        return None;
+    }
+    let shortlist = slot
+        .get_or_init(|| crate::head::Shortlist::build(head))
+        .as_ref()?;
+    let (copy_data, pairs, slack) = shortlist.device_parts();
+    let copy_mat = Matrix::new(TensorType::Q4K, copy_data, head.rows, head.cols);
+    let copy = gpu.matrix(&copy_mat).ok()?;
+    let radii = gpu.vector(&pack_radii(&pairs)).ok()?;
+    Some(CudaShortlist { copy, radii, slack })
 }

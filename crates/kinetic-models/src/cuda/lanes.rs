@@ -235,7 +235,7 @@ impl CudaModel<'_> {
                 *recorded = None;
                 let graph = stream.capture(|| {
                     self.queue_shared(lead, rest, &starts, &flows, total)?;
-                    self.queue_head(&mut lead.scratch, 0..total)
+                    self.queue_head(&mut lead.scratch, 0..total, true)
                 })?;
                 *recorded = Some((ids, graph));
             }
@@ -247,7 +247,7 @@ impl CudaModel<'_> {
         } else {
             self.queue_shared(lead, rest, &starts, &flows, total)?;
             if rows == total {
-                self.queue_head(&mut lead.scratch, 0..total)?;
+                self.queue_head(&mut lead.scratch, 0..total, logits)?;
             }
         }
 
@@ -269,7 +269,7 @@ impl CudaModel<'_> {
                 packed.h.copy_rows_from(at, &s.h, r.clone(), stream)?;
                 at += r.len();
             }
-            self.queue_head(packed, 0..rows)?;
+            self.queue_head(packed, 0..rows, logits)?;
             self.read_head(packed, rows, logits, &mut head)?;
         }
 

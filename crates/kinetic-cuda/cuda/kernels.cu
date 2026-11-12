@@ -24,5 +24,6 @@
 #include "quantize.cuh"
 #include "read_sum.cuh"
 #include "short_conv.cuh"
+#include "shortlist.cuh"
 #include "ssm.cuh"
 #include "vision.cuh"
