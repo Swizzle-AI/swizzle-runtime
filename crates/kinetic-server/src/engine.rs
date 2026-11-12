@@ -158,6 +158,7 @@ pub struct Engine<'a> {
     drafts: AtomicU64,
     zero_wait: bool,
     receipts: Option<Receipts>,
+    backend_name: &'static str,
 }
 
 struct Vision<'a> {
@@ -204,6 +205,7 @@ impl<'a> Engine<'a> {
             }
         }
 
+        let backend_name = backend.backend_name();
         Ok(Engine {
             name: name.into(),
             tokenizer,
@@ -224,7 +226,13 @@ impl<'a> Engine<'a> {
             drafts: AtomicU64::new(0),
             zero_wait: true,
             receipts: None,
+            backend_name,
         })
+    }
+
+    /// Short lowercase identifier for the active execution backend (`"cpu"`, `"cuda"`, `"vulkan"`).
+    pub fn backend_name(&self) -> &'static str {
+        self.backend_name
     }
 
     /// Lets requests ask for receipts, made with `receipts`.

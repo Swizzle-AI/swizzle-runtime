@@ -87,4 +87,9 @@ pub trait Backend: Send {
     fn run_ahead(&mut self, _prompt: &[u32]) -> usize {
         0
     }
+
+    /// Short lowercase identifier for the execution backend (`"cpu"`, `"cuda"`, `"vulkan"`).
+    fn backend_name(&self) -> &'static str {
+        "cpu"
+    }
 }

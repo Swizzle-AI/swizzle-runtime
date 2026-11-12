@@ -312,8 +312,9 @@ fn chat(engine: &Engine, req: ChatRequest, out: &mut impl Write) -> Result<(), A
         if let Some(log) = &log {
             body["choices"][0]["logprobs"] = logprobs::chat(&log.range(0, usize::MAX), piece);
         }
-        add_receipt(&mut body, engine, &req.common, input(), &request, &c)?;
-        return send_json(out, &body);
+        let receipt_hash = add_receipt(&mut body, engine, &req.common, input(), &request, &c)?;
+        let headers = telemetry_headers(engine, &c, receipt_hash.as_deref());
+        return send_json_with_headers(out, &body, &headers);
     }
 
     let first = api::chat_chunk(
@@ -321,7 +322,11 @@ fn chat(engine: &Engine, req: ChatRequest, out: &mut impl Write) -> Result<(), A
         Some(json!({"role": "assistant", "content": ""})),
         None,
     );
-    let mut events = Events::new(out, Some(first));
+    let mut events = Events::with_headers(
+        out,
+        Some(first),
+        vec![("X-Swizzle-Backend", engine.backend_name().to_owned())],
+    );
     let mut sent = 0;
     let c = engine
         .complete_with_logprobs(&prompt, &request, log.as_ref(), &mut |part, generated| {
@@ -410,11 +415,16 @@ fn completion(
             let tokens = log.range(0, usize::MAX);
             body["choices"][0]["logprobs"] = logprobs::completion(&tokens, piece, &mut offset);
         }
-        add_receipt(&mut body, engine, &req.common, input(), &request, &c)?;
-        return send_json(out, &body);
+        let receipt_hash = add_receipt(&mut body, engine, &req.common, input(), &request, &c)?;
+        let headers = telemetry_headers(engine, &c, receipt_hash.as_deref());
+        return send_json_with_headers(out, &body, &headers);
     }
 
-    let mut events = Events::new(out, None);
+    let mut events = Events::with_headers(
+        out,
+        None,
+        vec![("X-Swizzle-Backend", engine.backend_name().to_owned())],
+    );
     let mut sent = 0;
     let c = engine
         .complete_with_logprobs(
@@ -466,7 +476,7 @@ fn prepare_receipt(
     Ok(())
 }
 
-/// Adds the receipt for `c` to `body` if the request asked for one.
+/// Adds the receipt for `c` to `body` if the request asked for one, returning its hex BLAKE3 digest.
 fn add_receipt(
     body: &mut Value,
     engine: &Engine,
@@ -474,9 +484,9 @@ fn add_receipt(
     input: Value,
     request: &Request,
     c: &Completion,
-) -> Result<(), ApiError> {
+) -> Result<Option<String>, ApiError> {
     let Some(receipts) = engine.receipts().filter(|_| common.receipt()) else {
-        return Ok(());
+        return Ok(None);
     };
     let r = receipts
         .make(input, common.constraint(), request, c)
@@ -486,8 +496,33 @@ fn add_receipt(
         })?;
     // through text, so f32 settings read 0.8 rather than 0.800000011920929
     let text = serde_json::to_string(&r).expect("a receipt serializes");
+    let hash = blake3::hash(text.as_bytes()).to_hex().to_string();
     body["receipt"] = serde_json::from_str(&text).expect("a receipt parses");
-    Ok(())
+    Ok(Some(hash))
+}
+
+fn telemetry_headers(
+    engine: &Engine,
+    c: &Completion,
+    receipt_hash: Option<&str>,
+) -> Vec<(&'static str, String)> {
+    let ttft_ms = c.timings.prefill.as_secs_f64() * 1000.0;
+    let decode_secs = c.timings.decode.as_secs_f64();
+    let tok_s = if decode_secs > 0.0 {
+        c.completion_tokens as f64 / decode_secs
+    } else {
+        0.0
+    };
+    let mut headers = vec![
+        ("X-Swizzle-Backend", engine.backend_name().to_owned()),
+        ("X-Swizzle-TTFT-Ms", format!("{ttft_ms:.2}")),
+        ("X-Swizzle-Tokens-Per-Sec", format!("{tok_s:.2}")),
+        ("X-Swizzle-Gen-Tokens", c.completion_tokens.to_string()),
+    ];
+    if let Some(hash) = receipt_hash {
+        headers.push(("X-Swizzle-Receipt-Hash", hash.to_owned()));
+    }
+    headers
 }
 
 /// A server-sent event stream that starts with its first event, so errors
@@ -496,15 +531,25 @@ pub(crate) struct Events<'w, W: Write> {
     out: &'w mut W,
     /// Sent right after the headers.
     opening: Option<Value>,
+    headers: Vec<(&'static str, String)>,
     started: bool,
     open: bool,
 }
 
 impl<'w, W: Write> Events<'w, W> {
     pub(crate) fn new(out: &'w mut W, opening: Option<Value>) -> Self {
+        Self::with_headers(out, opening, Vec::new())
+    }
+
+    pub(crate) fn with_headers(
+        out: &'w mut W,
+        opening: Option<Value>,
+        headers: Vec<(&'static str, String)>,
+    ) -> Self {
         Events {
             out,
             opening,
+            headers,
             started: false,
             open: true,
         }
@@ -521,7 +566,9 @@ impl<'w, W: Write> Events<'w, W> {
     fn try_send(&mut self, data: &Value) -> io::Result<()> {
         if !self.started {
             self.started = true;
-            http::write_event_stream_head(self.out)?;
+            let pairs: Vec<(&str, &str)> =
+                self.headers.iter().map(|(k, v)| (*k, v.as_str())).collect();
+            http::write_event_stream_head_with(self.out, &pairs)?;
             if let Some(opening) = self.opening.take() {
                 http::write_event(self.out, &opening.to_string())?;
             }
@@ -545,8 +592,23 @@ fn invalid(e: RequestError) -> ApiError {
 }
 
 pub(crate) fn send_json(out: &mut impl Write, body: &Value) -> Result<(), ApiError> {
+    send_json_with_headers(out, body, &[])
+}
+
+pub(crate) fn send_json_with_headers(
+    out: &mut impl Write,
+    body: &Value,
+    headers: &[(&'static str, String)],
+) -> Result<(), ApiError> {
+    let pairs: Vec<(&str, &str)> = headers.iter().map(|(k, v)| (*k, v.as_str())).collect();
     // A client that left cannot be told anything more.
-    let _ = http::write_response(out, 200, "application/json", body.to_string().as_bytes());
+    let _ = http::write_response_with_headers(
+        out,
+        200,
+        "application/json",
+        &pairs,
+        body.to_string().as_bytes(),
+    );
     Ok(())
 }
 
@@ -622,5 +684,34 @@ mod tests {
         });
         assert!(matches!(http::read_head(&mut reader), Err(ReadError::Io)));
         assert!(start.elapsed() < Duration::from_secs(2));
+    }
+
+    #[test]
+    fn telemetry_headers_frame_json_and_sse_responses() {
+        let mut out = Vec::new();
+        let headers = vec![
+            ("X-Swizzle-Backend", "cpu".to_owned()),
+            ("X-Swizzle-TTFT-Ms", "2.50".to_owned()),
+            ("X-Swizzle-Tokens-Per-Sec", "48.00".to_owned()),
+            ("X-Swizzle-Gen-Tokens", "12".to_owned()),
+        ];
+        send_json_with_headers(&mut out, &json!({"ok": true}), &headers).unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("X-Swizzle-Backend: cpu\r\n"));
+        assert!(text.contains("X-Swizzle-TTFT-Ms: 2.50\r\n"));
+        assert!(text.contains("X-Swizzle-Tokens-Per-Sec: 48.00\r\n"));
+        assert!(text.contains("X-Swizzle-Gen-Tokens: 12\r\n"));
+
+        let mut sse = Vec::new();
+        let mut events = Events::with_headers(
+            &mut sse,
+            Some(json!({"id": "open"})),
+            vec![("X-Swizzle-Backend", "cuda".to_owned())],
+        );
+        assert!(events.send(&json!({"id": "delta"})));
+        let sse_text = String::from_utf8(sse).unwrap();
+        assert!(sse_text.contains("X-Swizzle-Backend: cuda\r\n"));
+        assert!(sse_text.contains("data: {\"id\":\"open\"}\n\n"));
+        assert!(sse_text.contains("data: {\"id\":\"delta\"}\n\n"));
     }
 }

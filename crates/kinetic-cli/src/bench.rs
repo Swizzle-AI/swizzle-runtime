@@ -65,11 +65,15 @@ pub fn edit_prompt() -> String {
     )
 }
 
-/// Best speeds over the repetitions, in tokens per second.
+/// Best speeds over the repetitions, in tokens per second, plus latency telemetry.
 struct Speeds {
     prefill: f64,
     decode: f64,
     edit: f64,
+    ttft_ms: f64,
+    itl_p50_ms: f64,
+    itl_p95_ms: f64,
+    itl_p99_ms: f64,
     /// Whether the edit test's drafted output equals plain decoding.
     edit_identical: bool,
 }
@@ -159,9 +163,13 @@ pub fn run(
             "parameters": params,
             "prefill_tokens": PROMPT_TOKENS,
             "prefill_tokens_per_second": speeds.prefill,
+            "ttft_ms": speeds.ttft_ms,
             "decode_tokens": GENERATED_TOKENS,
             "decode_depth": tests.depth,
             "decode_tokens_per_second": speeds.decode,
+            "decode_itl_p50_ms": speeds.itl_p50_ms,
+            "decode_itl_p95_ms": speeds.itl_p95_ms,
+            "decode_itl_p99_ms": speeds.itl_p99_ms,
             "edit_tokens": EDIT_TOKENS,
             "edit_tokens_per_second": speeds.edit,
             "edit_identical": speeds.edit_identical,
@@ -194,6 +202,11 @@ pub fn run(
     }
     writeln!(out)?;
     writeln!(out, "on {on}, best of {repetitions}, load {load:.2} s")?;
+    writeln!(
+        out,
+        "latency: ttft {:.2} ms, decode ITL p50 {:.2} / p95 {:.2} / p99 {:.2} ms",
+        speeds.ttft_ms, speeds.itl_p50_ms, speeds.itl_p95_ms, speeds.itl_p99_ms
+    )?;
     writeln!(
         out,
         "speed technologies {technologies}; Warm Start, Zero Wait and Convoy take no part"
@@ -304,19 +317,46 @@ fn measure<P: Backend, D: Backend>(
         prefill: 0.0,
         decode: 0.0,
         edit: 0.0,
+        ttft_ms: f64::INFINITY,
+        itl_p50_ms: 0.0,
+        itl_p95_ms: 0.0,
+        itl_p99_ms: 0.0,
         edit_identical: true,
     };
+    let mut itl_ms = Vec::with_capacity(GENERATED_TOKENS * tests.repetitions);
     for _ in 0..tests.repetitions {
         let t = plain.generate(&tokens, &job(1), &mut ignore);
-        speeds.prefill = speeds
-            .prefill
-            .max(PROMPT_TOKENS as f64 / t.prefill.as_secs_f64());
+        let prefill_secs = t.prefill.as_secs_f64();
+        speeds.prefill = speeds.prefill.max(PROMPT_TOKENS as f64 / prefill_secs);
+        speeds.ttft_ms = speeds.ttft_ms.min(prefill_secs * 1000.0);
         // The last token is sampled but never run, so one more is asked for.
-        let t = plain.generate(&context, &job(GENERATED_TOKENS + 1), &mut ignore);
+        let mut prev_tok: Option<Instant> = None;
+        let t = plain.generate(
+            &context,
+            &job(GENERATED_TOKENS + 1),
+            &mut |new: &[u32]| {
+                let now = Instant::now();
+                if let Some(prev) = prev_tok.replace(now) {
+                    if !new.is_empty() {
+                        let step_ms =
+                            now.duration_since(prev).as_secs_f64() * 1000.0 / new.len() as f64;
+                        itl_ms.resize(itl_ms.len() + new.len(), step_ms);
+                    }
+                }
+                true
+            },
+        );
         speeds.decode = speeds
             .decode
             .max(GENERATED_TOKENS as f64 / t.decode.as_secs_f64());
     }
+    if !speeds.ttft_ms.is_finite() {
+        speeds.ttft_ms = 0.0;
+    }
+    itl_ms.sort_by(f64::total_cmp);
+    speeds.itl_p50_ms = percentile_ms(&itl_ms, 0.50);
+    speeds.itl_p95_ms = percentile_ms(&itl_ms, 0.95);
+    speeds.itl_p99_ms = percentile_ms(&itl_ms, 0.99);
 
     let answer = |backend: &mut dyn Backend| {
         let mut tokens = Vec::new();
@@ -335,4 +375,27 @@ fn measure<P: Backend, D: Backend>(
         speeds.edit = speeds.edit.max(speed);
     }
     Ok(speeds)
+}
+
+fn percentile_ms(sorted: &[f64], pct: f64) -> f64 {
+    if sorted.is_empty() {
+        return 0.0;
+    }
+    let idx = (((sorted.len() - 1) as f64) * pct.clamp(0.0, 1.0)).round() as usize;
+    sorted[idx]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::percentile_ms;
+
+    #[test]
+    fn percentiles_handle_empty_single_and_sorted_samples() {
+        assert_eq!(percentile_ms(&[], 0.50), 0.0);
+        assert_eq!(percentile_ms(&[4.2], 0.99), 4.2);
+        let samples: Vec<f64> = (1..=100).map(|v| v as f64).collect();
+        assert_eq!(percentile_ms(&samples, 0.50), 51.0);
+        assert_eq!(percentile_ms(&samples, 0.95), 95.0);
+        assert_eq!(percentile_ms(&samples, 0.99), 99.0);
+    }
 }
