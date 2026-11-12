@@ -11,6 +11,7 @@ pub const QK: usize = 32;
 /// One scale per 32 values rather than per 256 keeps the precision of
 /// blocks next to a large outlier, which some models (Gemma 3) have in
 /// almost every activation vector.
+#[derive(Default)]
 pub struct Q8 {
     pub d: Vec<f32>,
     pub qs: Vec<i8>,
@@ -19,20 +20,27 @@ pub struct Q8 {
 
 impl Q8 {
     pub fn quantize(x: &[f32]) -> Q8 {
+        let mut q = Q8::default();
+        q.quantize_into(x);
+        q
+    }
+
+    /// Quantizes `x` into `self`, reusing allocated capacities across calls.
+    pub fn quantize_into(&mut self, x: &[f32]) {
         assert_eq!(
             x.len() % QK,
             0,
             "length {} is not a multiple of {QK}",
             x.len()
         );
-        let mut qs = vec![0; x.len()];
-        let mut d = Vec::with_capacity(x.len() / QK);
-        let mut sums = Vec::with_capacity(x.len() / QK);
-        for (src, dst) in x.chunks_exact(QK).zip(qs.chunks_exact_mut(QK)) {
-            d.push(quantize_block(src, dst));
-            sums.push(dst.iter().map(|&v| v as i32).sum::<i32>() as i16);
+        self.qs.resize(x.len(), 0);
+        self.d.clear();
+        self.sums.clear();
+        for (src, dst) in x.chunks_exact(QK).zip(self.qs.chunks_exact_mut(QK)) {
+            self.d.push(quantize_block(src, dst));
+            self.sums
+                .push(dst.iter().map(|&v| v as i32).sum::<i32>() as i16);
         }
-        Q8 { d, qs, sums }
     }
 
     pub fn blocks(&self) -> usize {

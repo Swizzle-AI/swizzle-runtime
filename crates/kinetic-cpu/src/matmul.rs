@@ -44,6 +44,10 @@ const MIN_TILE_TOKENS: usize = 2;
 /// Every output value is computed the same way whatever the batch size and
 /// wherever its token sits in the batch.
 pub fn matmul(w: &Matrix, x: &[f32], y: &mut [f32]) {
+    if x.len() == w.cols {
+        matmul_single_target(w, None, x, y);
+        return;
+    }
     matmul_many(&[w], x, &mut [y]);
 }
 
@@ -51,6 +55,10 @@ pub fn matmul(w: &Matrix, x: &[f32], y: &mut [f32]) {
 /// weights into an intermediate matrix buffer. Writes `n` rows of `rows.len()`
 /// outputs to `y`.
 pub fn matmul_indexed(w: &Matrix, rows: &[u32], x: &[f32], y: &mut [f32]) {
+    if x.len() == w.cols {
+        matmul_single_target(w, Some(rows), x, y);
+        return;
+    }
     let prepared = PreparedBatch::new(&[w], x);
     matmul_indexed_prepared(w, rows, &prepared, y);
 }
@@ -70,9 +78,135 @@ pub fn matmul_indexed_prepared(w: &Matrix, rows: &[u32], prepared: &PreparedBatc
 /// job. The input is quantized once and small matrices do not each pay for a
 /// separate fork and join.
 pub fn matmul_many(ws: &[&Matrix], x: &[f32], ys: &mut [&mut [f32]]) {
+    let cols = ws.first().map_or(0, |w| w.cols);
+    if cols > 0 && x.len() == cols && ws.len() == ys.len() {
+        matmul_many_single(ws, x, ys);
+        return;
+    }
     let prepared = PreparedBatch::new(ws, x);
     let targets: Vec<(&Matrix, Option<&[u32]>)> = ws.iter().map(|&w| (w, None)).collect();
     matmul_targets(&targets, &prepared, ys);
+}
+
+#[derive(Default)]
+struct SingleWorkspace {
+    xk: Q8K,
+    x32: Q8,
+}
+
+thread_local! {
+    static SINGLE_WORKSPACE: RefCell<SingleWorkspace> = RefCell::default();
+}
+
+fn matmul_single_target(w: &Matrix, rows: Option<&[u32]>, x: &[f32], y: &mut [f32]) {
+    let row_count = rows.map_or(w.rows, |r| r.len());
+    assert_eq!(x.len(), w.cols);
+    assert_eq!(y.len(), row_count);
+    if let Some(indices) = rows {
+        for &r in indices {
+            assert!((r as usize) < w.rows, "row index {r} out of bounds");
+        }
+    }
+    if row_count == 0 {
+        return;
+    }
+    let path = Path::of(w, 1);
+    SINGLE_WORKSPACE.with_borrow_mut(|ws| {
+        match path {
+            Path::K(_) => ws.xk.quantize_into(x),
+            Path::B32(_) => ws.x32.quantize_into(x),
+            Path::Float | Path::Dequantized => {}
+        }
+        let input = Input {
+            x,
+            xk: std::slice::from_ref(&ws.xk),
+            gk: &[],
+            x32: std::slice::from_ref(&ws.x32),
+            g32: &[],
+        };
+        let out = Out(y.as_mut_ptr());
+        let tasks = row_count.div_ceil(ROWS_PER_TASK);
+        pool::for_each_decode(tasks, &|i| {
+            let r = i * ROWS_PER_TASK;
+            let tile = Tile {
+                w,
+                indices: rows,
+                out_stride: row_count,
+                path,
+                rows: r..row_count.min(r + ROWS_PER_TASK),
+                tokens: 0..1,
+                out,
+            };
+            SCRATCH.with_borrow_mut(|scratch| tile.run(&input, scratch));
+        });
+    });
+}
+
+fn matmul_many_single(ws: &[&Matrix], x: &[f32], ys: &mut [&mut [f32]]) {
+    let cols = ws.first().map_or(0, |w| w.cols);
+    assert!(cols > 0 && x.len() == cols);
+    for (w, y) in ws.iter().zip(ys.iter()) {
+        assert_eq!(w.cols, cols, "weights must share the input width");
+        assert_eq!(y.len(), w.rows);
+    }
+    let paths: Vec<Path> = ws.iter().map(|w| Path::of(w, 1)).collect();
+    let need_k = paths.iter().any(|p| matches!(p, Path::K(_)));
+    let need_b32 = paths.iter().any(|p| matches!(p, Path::B32(_)));
+    SINGLE_WORKSPACE.with_borrow_mut(|work| {
+        if need_k {
+            work.xk.quantize_into(x);
+        }
+        if need_b32 {
+            work.x32.quantize_into(x);
+        }
+        let input = Input {
+            x,
+            xk: std::slice::from_ref(&work.xk),
+            gk: &[],
+            x32: std::slice::from_ref(&work.x32),
+            g32: &[],
+        };
+        let mut first = 0;
+        let plans: Vec<Plan> = ws
+            .iter()
+            .zip(&paths)
+            .zip(ys.iter_mut())
+            .map(|((&w, &path), y)| {
+                let plan = Plan {
+                    w,
+                    indices: None,
+                    row_count: w.rows,
+                    path,
+                    rows: ROWS_PER_TASK,
+                    first,
+                    out: Out(y.as_mut_ptr()),
+                };
+                first += w.rows.div_ceil(ROWS_PER_TASK);
+                plan
+            })
+            .collect();
+        if first == 0 {
+            return;
+        }
+        pool::for_each_decode(first, &|i| {
+            let plan = plans
+                .iter()
+                .rev()
+                .find(|p| p.first <= i)
+                .expect("first plan");
+            let r = (i - plan.first) * ROWS_PER_TASK;
+            let tile = Tile {
+                w: plan.w,
+                indices: None,
+                out_stride: plan.row_count,
+                path: plan.path,
+                rows: r..plan.row_count.min(r + ROWS_PER_TASK),
+                tokens: 0..1,
+                out: plan.out,
+            };
+            SCRATCH.with_borrow_mut(|scratch| tile.run(&input, scratch));
+        });
+    });
 }
 
 /// Activations quantized once for a group of weight matrices and reusable

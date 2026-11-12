@@ -43,6 +43,7 @@ impl Shortlist {
 
     /// Raw Q4_K copy bytes, `[head, spread]` radii pairs, and rounding slack
     /// for device upload.
+    #[cfg_attr(not(feature = "cuda"), allow(dead_code))]
     pub(crate) fn device_parts(&self) -> (&[u8], Vec<(f32, f32)>, f32) {
         let pairs = self.radii.iter().map(|r| (r.head, r.spread)).collect();
         (&self.copy, pairs, self.slack as f32)
