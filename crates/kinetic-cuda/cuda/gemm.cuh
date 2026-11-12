@@ -25,9 +25,14 @@ constexpr unsigned GEMM_K = 128;
 constexpr unsigned GEMM_SUBS = GEMM_K / 32;
 // Threads that decode each row of weights, a quarter of its stage each.
 constexpr unsigned GEMM_PARTS = 4;
-// Bytes per row of an int8 tile: the padding puts the eight rows of an
-// ldmatrix read in distinct banks.
-constexpr unsigned GEMM_ROW = GEMM_K + 16;
+// Bytes per row of an int8 tile: exact GEMM_K (128B) with XOR chunk swizzling
+// below so every 8-row ldmatrix read hits 8 distinct 16B shared banks with
+// zero +16B padding overhead.
+constexpr unsigned GEMM_ROW = GEMM_K;
+
+__device__ __forceinline__ constexpr unsigned gemm_swizzle(unsigned row, unsigned byte_off) {
+    return byte_off ^ ((row & 7u) << 4);
+}
 
 // A tile of R rows and C inputs, of which a multiprocessor runs B blocks at
 // once: each warp takes M m tiles of 16 rows and NT n tiles of 8 inputs.
@@ -136,7 +141,7 @@ struct GemmK4 {
                 v[i] = (q[i] >> (4 * hi)) & NIBBLES;
                 if (Q5) v[i] |= ((qh[i] >> (4 * half + 2 * c + hi)) & 0x01010101) << 4;
             }
-            st_words(&st.w[row][32 * (2 * c + hi) + l], v);
+            st_words(&st.w[row][gemm_swizzle(row, 32 * (2 * c + hi) + l)], v);
         }
         const float2 sm = k4_group(r.head, 4 * half + u);
         gemm_put_scale(st, u, 0, row, sm.x);
@@ -183,7 +188,7 @@ struct GemmQ6K {
             unsigned v[4];
 #pragma unroll
             for (unsigned i = 0; i < 4; ++i) v[i] = k6_quants(ql[i], qh[i], sub);
-            st_words(&st.w[row][32 * sub + l], v);
+            st_words(&st.w[row][gemm_swizzle(row, 32 * sub + l)], v);
         }
 #pragma unroll
         for (unsigned i = 0; i < 2; ++i)
@@ -214,7 +219,7 @@ struct GemmQ8_0 {
     __device__ static void store(const Raw& r, S& st, unsigned row, unsigned, unsigned u) {
 #pragma unroll
         for (unsigned i = 0; i < 2; ++i)
-            *reinterpret_cast<uint4*>(&st.w[row][32 * u + 16 * i]) = r.q[i];
+            *reinterpret_cast<uint4*>(&st.w[row][gemm_swizzle(row, 32 * u + 16 * i)]) = r.q[i];
         gemm_put_scale(st, u, 0, row, r.d);
     }
 };
@@ -246,8 +251,8 @@ struct GemmQ4_0 {
             lo[i] = __vsub4(q[i] & NIBBLES, 0x08080808u);
             hi[i] = __vsub4(q[i] >> 4 & NIBBLES, 0x08080808u);
         }
-        st_words(&st.w[row][32 * u], lo);
-        st_words(&st.w[row][32 * u + 16], hi);
+        st_words(&st.w[row][gemm_swizzle(row, 32 * u)], lo);
+        st_words(&st.w[row][gemm_swizzle(row, 32 * u + 16)], hi);
         gemm_put_scale(st, u, 0, row, r.d);
     }
 };
@@ -282,8 +287,8 @@ struct GemmPQ2_0 {
             lo[i] = spread(r.q.x >> (8 * i) & 0xFF);
             hi[i] = spread(r.q.y >> (8 * i) & 0xFF);
         }
-        st_words(&st.w[row][32 * u], lo);
-        st_words(&st.w[row][32 * u + 16], hi);
+        st_words(&st.w[row][gemm_swizzle(row, 32 * u)], lo);
+        st_words(&st.w[row][gemm_swizzle(row, 32 * u + 16)], hi);
         gemm_put_scale(st, u, 0, row, r.d);
     }
 };
@@ -299,7 +304,7 @@ __device__ __forceinline__ void gemm_copy_inputs(GemmStage<T>& st, const int8_t*
     for (unsigned c = threadIdx.x; c < T::COLS * CHUNKS; c += T::THREADS) {
         const unsigned row = c / CHUNKS, part = c % CHUNKS;
         const size_t col = min(col0 + row, n - 1);
-        cp_async16(&st.x[row][16 * part], qs + col * cols + k * GEMM_K + 16 * part);
+        cp_async16(&st.x[row][gemm_swizzle(row, 16 * part)], qs + col * cols + k * GEMM_K + 16 * part);
     }
     cp_async_commit();
 }
@@ -346,12 +351,15 @@ __device__ __forceinline__ void gemm_subs(GemmAcc<T>& acc, const GemmStage<T>& s
         // 16-31 of inputs 0-7, then of inputs 8-15.
         unsigned a[T::MT][4], b[T::NT][2];
 #pragma unroll
-        for (unsigned m = 0; m < T::MT; ++m)
-            ldsm_x4(a[m], &st.w[r0 + 16 * m + lane % 16][32 * s + 16 * (lane / 16)]);
+        for (unsigned m = 0; m < T::MT; ++m) {
+            const unsigned wr = r0 + 16 * m + lane % 16;
+            ldsm_x4(a[m], &st.w[wr][gemm_swizzle(wr, 32 * s + 16 * (lane / 16))]);
+        }
 #pragma unroll
         for (unsigned j = 0; j < T::NT; j += 2) {
             unsigned r[4];
-            ldsm_x4(r, &st.x[c0 + 8 * j + lane % 8 + 8 * (lane / 16)][32 * s + 16 * ((lane / 8) % 2)]);
+            const unsigned xr = c0 + 8 * j + lane % 8 + 8 * (lane / 16);
+            ldsm_x4(r, &st.x[xr][gemm_swizzle(xr, 32 * s + 16 * ((lane / 8) % 2))]);
             b[j][0] = r[0];
             b[j][1] = r[1];
             b[j + 1][0] = r[2];
@@ -536,10 +544,10 @@ __device__ __forceinline__ void gemm(const uint8_t* w, const uint8_t* up, Q8Inpu
 using GemmTile32 = GemmTile<64, 32, 1, 2>;
 using GemmTile64 = GemmTile<64, 64, 2, 2>;
 using GemmTile128 = GemmTile<128, 128, 2, 1>;
-// The sizes QUANT_TILES in gemm.rs gives.
-static_assert(2 * sizeof(GemmStage<GemmTile32>) == 33792, "shared bytes of the 32-wide tile");
-static_assert(2 * sizeof(GemmStage<GemmTile64>) == 45056, "shared bytes of the 64-wide tile");
-static_assert(2 * sizeof(GemmStage<GemmTile128>) == 90112, "shared bytes of the 128-wide tile");
+// The sizes QUANT_TILES in gemm.rs gives (with Swizzle XOR banking, no +16B padding).
+static_assert(2 * sizeof(GemmStage<GemmTile32>) == 30720, "shared bytes of the 32-wide tile");
+static_assert(2 * sizeof(GemmStage<GemmTile64>) == 40960, "shared bytes of the 64-wide tile");
+static_assert(2 * sizeof(GemmStage<GemmTile128>) == 81920, "shared bytes of the 128-wide tile");
 
 // Kernel names as gemm.rs builds them: the width follows the format's name.
 #define GEMM_KERNELS(name, F)             \
