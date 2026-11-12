@@ -1,6 +1,37 @@
 use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
 
 use super::{Drafter, Target};
+
+/// Fast non-cryptographic hasher tuned for `(u32, u32)` suffix-automaton transitions.
+#[derive(Default)]
+struct FxHasher(u64);
+
+impl Hasher for FxHasher {
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0
+    }
+
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        for &b in bytes {
+            self.0 = (self.0.rotate_left(5) ^ b as u64).wrapping_mul(0x517cc1b727220a95);
+        }
+    }
+
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.0 = (self.0.rotate_left(5) ^ i as u64).wrapping_mul(0x517cc1b727220a95);
+    }
+
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        self.0 = (self.0.rotate_left(5) ^ i).wrapping_mul(0x517cc1b727220a95);
+    }
+}
+
+type FxHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher>>;
 
 const NONE: u32 = u32::MAX;
 
@@ -22,7 +53,7 @@ pub struct SessionIndex {
     tokens: Vec<u32>,
     nodes: Vec<Node>,
     /// Transitions, by state and token.
-    edges: HashMap<(u32, u32), u32>,
+    edges: FxHashMap<(u32, u32), u32>,
     /// Each state's transition tokens as a linked list, for cloning states.
     out: Vec<(u32, u32)>,
     /// The state of the whole history.
@@ -56,7 +87,7 @@ impl SessionIndex {
         let mut index = SessionIndex {
             tokens: Vec::new(),
             nodes: Vec::new(),
-            edges: HashMap::new(),
+            edges: FxHashMap::default(),
             out: Vec::new(),
             last: 0,
             capacity: capacity.max(2),
