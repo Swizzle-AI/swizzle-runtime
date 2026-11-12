@@ -30,13 +30,23 @@ const MAX_TASKS: usize = u16::MAX as usize;
 /// calling thread, and returns when all have run. Calls made while the pool
 /// is busy, from a task or from another thread, go through rayon instead.
 pub fn for_each(tasks: usize, f: &(dyn Fn(usize) + Sync)) {
+    for_each_limit(tasks, pool().threads, f);
+}
+
+/// Like [`for_each`], capped to the detected physical core count so
+/// memory-bandwidth-bound single-token decode avoids SMT cache contention.
+pub fn for_each_decode(tasks: usize, f: &(dyn Fn(usize) + Sync)) {
+    for_each_limit(tasks, pool().physical, f);
+}
+
+fn for_each_limit(tasks: usize, limit: usize, f: &(dyn Fn(usize) + Sync)) {
     match tasks {
         0 => {}
         1 => f(0),
-        _ if tasks <= MAX_TASKS => pool().run(tasks, f),
+        _ if tasks <= MAX_TASKS => pool().run(tasks, limit, f),
         _ => {
             let per = tasks.div_ceil(MAX_TASKS);
-            pool().run(tasks.div_ceil(per), &|c| {
+            pool().run(tasks.div_ceil(per), limit, &|c| {
                 (c * per..tasks.min(c * per + per)).for_each(f)
             })
         }
@@ -140,10 +150,13 @@ impl State {
 struct Pool {
     shared: &'static Shared,
     threads: usize,
+    physical: usize,
 }
 
 struct Shared {
     state: AtomicU64,
+    /// Active worker limit (`0..limit`) for the current job.
+    limit: AtomicUsize,
     /// The current job, valid while any of its tasks is unfinished.
     job: UnsafeCell<*const (dyn Fn(usize) + Sync)>,
     finished: AtomicUsize,
@@ -160,10 +173,29 @@ struct Shared {
 unsafe impl Sync for Shared {}
 unsafe impl Send for Shared {}
 
+fn detect_physical_cores(logical: usize) -> usize {
+    #[cfg(target_os = "linux")]
+    if let Ok(entries) = std::fs::read_dir("/sys/devices/system/cpu") {
+        let mut cores = std::collections::BTreeSet::new();
+        for entry in entries.flatten() {
+            let path = entry.path().join("topology/thread_siblings_list");
+            if let Ok(s) = std::fs::read_to_string(path) {
+                cores.insert(s.trim().to_owned());
+            }
+        }
+        if !cores.is_empty() {
+            return cores.len().clamp(1, logical);
+        }
+    }
+    logical
+}
+
 impl Pool {
     fn new(threads: usize) -> Pool {
+        let physical = detect_physical_cores(threads);
         let shared: &'static Shared = Box::leak(Box::new(Shared {
             state: AtomicU64::new(0),
+            limit: AtomicUsize::new(threads),
             job: UnsafeCell::new(&(|_| {}) as &(dyn Fn(usize) + Sync)),
             finished: AtomicUsize::new(0),
             busy: AtomicBool::new(false),
@@ -175,17 +207,26 @@ impl Pool {
         for i in 1..threads {
             thread::Builder::new()
                 .name(format!("kinetic-{i}"))
-                .spawn(move || shared.work())
+                .spawn(move || shared.work(i))
                 .expect("spawn a pool thread");
         }
-        Pool { shared, threads }
+        Pool {
+            shared,
+            threads,
+            physical,
+        }
     }
 
-    fn run(&self, tasks: usize, f: &(dyn Fn(usize) + Sync)) {
+    fn run(&self, tasks: usize, limit: usize, f: &(dyn Fn(usize) + Sync)) {
         let s = self.shared;
-        if self.threads < 2 || s.busy.swap(true, Ordering::Acquire) {
-            use rayon::prelude::*;
-            (0..tasks).into_par_iter().for_each(f);
+        let active = limit.clamp(1, self.threads);
+        if active < 2 || self.threads < 2 || s.busy.swap(true, Ordering::Acquire) {
+            if active < 2 {
+                (0..tasks).for_each(f);
+            } else {
+                use rayon::prelude::*;
+                (0..tasks).into_par_iter().for_each(f);
+            }
             return;
         }
         // SAFETY: the lifetime is erased only for the duration of this call,
@@ -195,6 +236,7 @@ impl Pool {
         // reads `job` until the release store of the new state below.
         unsafe { *s.job.get() = f };
         s.finished.store(0, Ordering::Relaxed);
+        s.limit.store(active, Ordering::Relaxed);
         let epoch = State::epoch(s.state.load(Ordering::Relaxed)).wrapping_add(1);
         s.state
             .store(State::pack(epoch, tasks, 0), Ordering::SeqCst);
@@ -202,7 +244,7 @@ impl Pool {
             let _guard = s.lock.lock().unwrap_or_else(|e| e.into_inner());
             s.wake.notify_all();
         }
-        s.help(epoch);
+        s.help(epoch, 0);
         let mut spins = 0u32;
         while s.finished.load(Ordering::Acquire) < tasks {
             spin(&mut spins);
@@ -227,7 +269,10 @@ fn spin(spins: &mut u32) {
 
 impl Shared {
     /// Runs tasks of job `epoch` until none is left.
-    fn help(&self, epoch: u32) {
+    fn help(&self, epoch: u32, worker_id: usize) {
+        if worker_id >= self.limit.load(Ordering::Acquire) {
+            return;
+        }
         let mut s = self.state.load(Ordering::Acquire);
         loop {
             if State::epoch(s) != epoch || State::next(s) >= State::tasks(s) {
@@ -255,7 +300,7 @@ impl Shared {
         }
     }
 
-    fn work(&self) {
+    fn work(&self, worker_id: usize) {
         let mut seen = State::epoch(self.state.load(Ordering::Acquire));
         loop {
             let idle = Instant::now();
@@ -271,7 +316,7 @@ impl Shared {
                 }
             };
             seen = epoch;
-            self.help(epoch);
+            self.help(epoch, worker_id);
         }
     }
 
@@ -297,6 +342,22 @@ mod tests {
         for tasks in [0, 1, 2, 7, 100, 1000, 70_000] {
             let counts: Vec<AtomicUsize> = (0..tasks).map(|_| AtomicUsize::new(0)).collect();
             for _ in 0..50 {
+                for_each(tasks, &|i| {
+                    counts[i].fetch_add(1, Ordering::Relaxed);
+                });
+            }
+            assert!(counts.iter().all(|c| c.load(Ordering::Relaxed) == 50));
+        }
+    }
+
+    #[test]
+    fn decode_pool_covers_every_task() {
+        for tasks in [0, 1, 2, 16, 256, 2048] {
+            let counts: Vec<AtomicUsize> = (0..tasks).map(|_| AtomicUsize::new(0)).collect();
+            for _ in 0..25 {
+                for_each_decode(tasks, &|i| {
+                    counts[i].fetch_add(1, Ordering::Relaxed);
+                });
                 for_each(tasks, &|i| {
                     counts[i].fetch_add(1, Ordering::Relaxed);
                 });
