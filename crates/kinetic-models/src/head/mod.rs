@@ -15,7 +15,7 @@ mod compact;
 use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
 
-use kinetic_cpu::{kernel_input, matmul, pool};
+use kinetic_cpu::{matmul_indexed_prepared, matmul_prepared, pool, PreparedBatch};
 use kinetic_quant::{Matrix, TensorType};
 
 /// Rows whose bounds one parallel task checks.
@@ -51,9 +51,10 @@ impl Shortlist {
         let vocab = head.rows;
         let copy = Matrix::new(TensorType::Q4K, &self.copy, vocab, head.cols);
         let n = x.len() / head.cols;
-        let scales = self.scales(head, &copy, x)?;
+        let batch = PreparedBatch::new(&[head, &copy], x);
+        let scales = batch.shortlist_scales(head, &copy, self.slack)?;
         let mut approx = vec![0.0; n * vocab];
-        matmul(&copy, x, &mut approx);
+        matmul_prepared(&copy, &batch, &mut approx);
 
         let mut picked = vec![false; vocab];
         let mut first = Vec::new();
@@ -65,7 +66,7 @@ impl Shortlist {
                 }
             }
         }
-        let first_logits = exact(head, x, &first);
+        let first_logits = exact_prepared(head, &batch, n, &first);
         if first_logits.iter().any(|v| v.is_nan()) {
             return None;
         }
@@ -98,7 +99,7 @@ impl Shortlist {
         if (first.len() + rest.len()) * 4 > vocab {
             return None;
         }
-        let rest_logits = exact(head, x, &rest);
+        let rest_logits = exact_prepared(head, &batch, n, &rest);
 
         let mut logits = vec![f32::NEG_INFINITY; n * vocab];
         for (rows, values) in [(&first, &first_logits), (&rest, &rest_logits)] {
@@ -112,33 +113,6 @@ impl Shortlist {
             }
         }
         Some(logits)
-    }
-
-    /// For each row of `x`, what the radii of a row are multiplied by:
-    /// `|xh|`, `|xh - xc|` and `slack |xc|`, rounded up. `None` if they are
-    /// not finite.
-    fn scales(&self, head: &Matrix, copy: &Matrix, x: &[f32]) -> Option<Vec<[f64; 3]>> {
-        let xh = kernel_input(head, x).expect("head checked at build");
-        let xc = kernel_input(copy, x).expect("Q4_K is quantized");
-        // Rounds the f64 sums up past any rounding in them.
-        let norm =
-            |v: &mut dyn Iterator<Item = f64>| v.map(|v| v * v).sum::<f64>().sqrt() * (1.0 + 1e-9);
-        let scales: Vec<[f64; 3]> = xh
-            .chunks_exact(head.cols)
-            .zip(xc.chunks_exact(head.cols))
-            .map(|(xh, xc)| {
-                [
-                    norm(&mut xh.iter().copied()),
-                    norm(&mut xh.iter().zip(xc).map(|(a, b)| a - b)),
-                    self.slack * norm(&mut xc.iter().copied()),
-                ]
-            })
-            .collect();
-        scales
-            .iter()
-            .flatten()
-            .all(|v| v.is_finite())
-            .then_some(scales)
     }
 }
 
@@ -166,19 +140,14 @@ fn highest(len: usize, top: usize, value: impl Fn(usize) -> f32) -> Vec<u32> {
 }
 
 /// The head's logits for rows `rows` only, token-major: what the full head
-/// computes for them, value for value.
-fn exact(head: &Matrix, x: &[f32], rows: &[u32]) -> Vec<f32> {
-    let n = x.len() / head.cols;
+/// computes for them, value for value, without copying weight rows or
+/// re-quantizing activations.
+fn exact_prepared(head: &Matrix, batch: &PreparedBatch, n: usize, rows: &[u32]) -> Vec<f32> {
     if rows.is_empty() {
         return Vec::new();
     }
-    let mut data = Vec::with_capacity(rows.len() * head.row_bytes());
-    for &r in rows {
-        data.extend_from_slice(head.row(r as usize));
-    }
-    let w = Matrix::new(head.ty, &data, rows.len(), head.cols);
     let mut y = vec![0.0; n * rows.len()];
-    matmul(&w, x, &mut y);
+    matmul_indexed_prepared(head, rows, batch, &mut y);
     y
 }
 
