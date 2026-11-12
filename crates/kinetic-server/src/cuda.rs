@@ -498,4 +498,8 @@ impl Backend for CudaBackend<'_> {
         let _seat = gpu.seat();
         self.ahead_of(prompt)
     }
+
+    fn backend_name(&self) -> &'static str {
+        "cuda"
+    }
 }

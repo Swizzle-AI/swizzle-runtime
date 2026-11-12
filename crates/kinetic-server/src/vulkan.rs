@@ -223,4 +223,8 @@ impl Backend for VulkanBackend<'_> {
             self.cpu.generate(prompt, job, emit)
         }
     }
+
+    fn backend_name(&self) -> &'static str {
+        "vulkan"
+    }
 }

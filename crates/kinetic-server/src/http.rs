@@ -166,6 +166,28 @@ pub fn write_continue(w: &mut impl Write) -> io::Result<()> {
     w.flush()
 }
 
+/// Writes a complete response with optional extra headers and asks the client to close.
+pub fn write_response_with_headers(
+    w: &mut impl Write,
+    status: u16,
+    content_type: &str,
+    headers: &[(&str, &str)],
+    body: &[u8],
+) -> io::Result<()> {
+    write!(
+        w,
+        "HTTP/1.1 {status} {}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\n",
+        reason(status),
+        body.len()
+    )?;
+    for (name, value) in headers {
+        write!(w, "{name}: {value}\r\n")?;
+    }
+    w.write_all(b"Connection: close\r\n\r\n")?;
+    w.write_all(body)?;
+    w.flush()
+}
+
 /// Writes a complete response and asks the client to close.
 pub fn write_response(
     w: &mut impl Write,
@@ -173,28 +195,37 @@ pub fn write_response(
     content_type: &str,
     body: &[u8],
 ) -> io::Result<()> {
-    write!(
-        w,
-        "HTTP/1.1 {status} {}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        reason(status),
-        body.len()
-    )?;
-    w.write_all(body)?;
-    w.flush()
+    write_response_with_headers(w, status, content_type, &[], body)
 }
 
-/// Starts a server-sent event stream, which ends when the connection does.
-pub fn write_event_stream_head(w: &mut impl Write) -> io::Result<()> {
-    write_stream_head(w, "text/event-stream")
+/// Starts a server-sent event stream with optional extra headers, which ends when the connection does.
+pub fn write_event_stream_head_with(
+    w: &mut impl Write,
+    headers: &[(&str, &str)],
+) -> io::Result<()> {
+    write_stream_head_with(w, "text/event-stream", headers)
+}
+
+/// Starts a response of `content_type` with optional extra headers that ends when the connection does.
+pub fn write_stream_head_with(
+    w: &mut impl Write,
+    content_type: &str,
+    headers: &[(&str, &str)],
+) -> io::Result<()> {
+    write!(
+        w,
+        "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nCache-Control: no-cache\r\n"
+    )?;
+    for (name, value) in headers {
+        write!(w, "{name}: {value}\r\n")?;
+    }
+    w.write_all(b"Connection: close\r\n\r\n")?;
+    w.flush()
 }
 
 /// Starts a response of `content_type` that ends when the connection does.
 pub fn write_stream_head(w: &mut impl Write, content_type: &str) -> io::Result<()> {
-    write!(
-        w,
-        "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n"
-    )?;
-    w.flush()
+    write_stream_head_with(w, content_type, &[])
 }
 
 /// Sends one server-sent event carrying `data`, line by line.
@@ -294,5 +325,29 @@ mod tests {
         assert!(text.starts_with("HTTP/1.1 404 Not Found\r\n"));
         assert!(text.contains("Content-Length: 2\r\n"));
         assert!(text.ends_with("Connection: close\r\n\r\n{}"));
+    }
+
+    #[test]
+    fn extra_headers_appear_in_responses_and_sse_streams() {
+        let mut out = Vec::new();
+        write_response_with_headers(
+            &mut out,
+            200,
+            "application/json",
+            &[("X-Swizzle-Backend", "cuda"), ("X-Swizzle-TTFT-Ms", "1.50")],
+            b"{}",
+        )
+        .unwrap();
+        let text = String::from_utf8(out).unwrap();
+        assert!(text.contains("X-Swizzle-Backend: cuda\r\n"));
+        assert!(text.contains("X-Swizzle-TTFT-Ms: 1.50\r\n"));
+        assert!(text.ends_with("Connection: close\r\n\r\n{}"));
+
+        let mut sse = Vec::new();
+        write_event_stream_head_with(&mut sse, &[("X-Swizzle-Backend", "cpu")]).unwrap();
+        let sse_text = String::from_utf8(sse).unwrap();
+        assert!(sse_text.contains("Content-Type: text/event-stream\r\n"));
+        assert!(sse_text.contains("X-Swizzle-Backend: cpu\r\n"));
+        assert!(sse_text.ends_with("Connection: close\r\n\r\n"));
     }
 }
