@@ -58,6 +58,7 @@ mod moe;
 mod norm;
 mod pinned;
 mod short_conv;
+mod shortlist;
 mod ssm;
 mod stream;
 mod vision;
@@ -82,6 +83,7 @@ pub use moe::{
 pub use norm::{AddNorm, RmsNorm};
 pub use pinned::PinnedBuffer;
 pub use short_conv::ConvState;
+pub use shortlist::{pack_radii, ShortlistWork};
 pub use ssm::{SsmParams, SsmShape, SsmState};
 pub use stream::{Event, Stream};
 pub use vision::VisionKernels;

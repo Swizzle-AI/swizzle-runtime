@@ -341,3 +341,60 @@ fn mismatched_shapes_are_rejected() {
     let result = gpu.kernels.gemv(&w, &input, &mut y, &gpu.stream);
     assert!(matches!(result, Err(Error::Shape(_))));
 }
+
+#[test]
+fn shortlist_matches_full_argmax_bit_for_bit() {
+    let Some(gpu) = gpu() else { return };
+    use kinetic_cuda::{pack_radii, ShortlistWork};
+    let (vocab, cols) = (512, 256);
+    for ty in [TensorType::Q8_0, TensorType::Q6K] {
+        let mut rng = Lcg(ty as u64 + 42);
+        let head_data = random_matrix(ty, vocab, cols, &mut rng);
+        let copy_data = random_matrix(TensorType::Q4K, vocab, cols, &mut rng);
+        let head =
+            DeviceMatrix::upload(&gpu.ctx, &Matrix::new(ty, &head_data, vocab, cols)).unwrap();
+        let copy = DeviceMatrix::upload(
+            &gpu.ctx,
+            &Matrix::new(TensorType::Q4K, &copy_data, vocab, cols),
+        )
+        .unwrap();
+
+        // Generous upper bound guarantees every potentially competitive row survives screening.
+        let pairs: Vec<(f32, f32)> = vec![(1_000.0f32, 0.0f32); vocab];
+        let radii = DeviceBuffer::from_slice(&gpu.ctx, &pack_radii(&pairs)).unwrap();
+
+        let x: Vec<f32> = (0..cols).map(|_| rng.f32() * 2.0).collect();
+        let mut input = GemvInput::new(&gpu.ctx, cols).unwrap();
+        input.upload(&gpu.kernels, &x, &gpu.stream).unwrap();
+
+        let mut logits = DeviceBuffer::new(&gpu.ctx, vocab).unwrap();
+        let mut full_best = Argmax::new(&gpu.ctx, 1, vocab).unwrap();
+        gpu.kernels
+            .gemv_rows(&head, vocab, &input, 0..1, &mut logits, &gpu.stream)
+            .unwrap();
+        gpu.kernels
+            .argmax(&logits, vocab, 1, &mut full_best, &gpu.stream)
+            .unwrap();
+
+        let mut short_work = ShortlistWork::new(&gpu.ctx, vocab).unwrap();
+        let mut short_best = Argmax::new(&gpu.ctx, 1, vocab).unwrap();
+        gpu.kernels
+            .shortlist_greedy(
+                &head,
+                &copy,
+                &radii,
+                0.0,
+                &input,
+                &mut short_work,
+                &mut short_best,
+                &gpu.stream,
+            )
+            .unwrap();
+
+        assert_eq!(
+            short_best.best().to_vec().unwrap(),
+            full_best.best().to_vec().unwrap(),
+            "shortlist greedy diverged on {ty}"
+        );
+    }
+}
