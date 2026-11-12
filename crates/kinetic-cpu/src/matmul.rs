@@ -47,51 +47,179 @@ pub fn matmul(w: &Matrix, x: &[f32], y: &mut [f32]) {
     matmul_many(&[w], x, &mut [y]);
 }
 
+/// [`matmul`] over a selected subset of rows `rows` of `w` without copying row
+/// weights into an intermediate matrix buffer. Writes `n` rows of `rows.len()`
+/// outputs to `y`.
+pub fn matmul_indexed(w: &Matrix, rows: &[u32], x: &[f32], y: &mut [f32]) {
+    let prepared = PreparedBatch::new(&[w], x);
+    matmul_indexed_prepared(w, rows, &prepared, y);
+}
+
+/// [`matmul`] reusing activations already quantized in `prepared`.
+pub fn matmul_prepared(w: &Matrix, prepared: &PreparedBatch, y: &mut [f32]) {
+    matmul_targets(&[(w, None)], prepared, &mut [y]);
+}
+
+/// Zero-copy [`matmul_indexed`] reusing activations already quantized in
+/// `prepared`.
+pub fn matmul_indexed_prepared(w: &Matrix, rows: &[u32], prepared: &PreparedBatch, y: &mut [f32]) {
+    matmul_targets(&[(w, Some(rows))], prepared, &mut [y]);
+}
+
 /// [`matmul`] for several weights that share the input `x`, as one parallel
 /// job. The input is quantized once and small matrices do not each pay for a
 /// separate fork and join.
 pub fn matmul_many(ws: &[&Matrix], x: &[f32], ys: &mut [&mut [f32]]) {
-    assert_eq!(ws.len(), ys.len());
-    let cols = ws.first().map_or(0, |w| w.cols);
-    assert!(cols > 0 && x.len().is_multiple_of(cols));
-    let n = x.len() / cols;
-    for (w, y) in ws.iter().zip(ys.iter()) {
-        assert_eq!(w.cols, cols, "weights must share the input width");
-        assert_eq!(y.len(), n * w.rows);
+    let prepared = PreparedBatch::new(ws, x);
+    let targets: Vec<(&Matrix, Option<&[u32]>)> = ws.iter().map(|&w| (w, None)).collect();
+    matmul_targets(&targets, &prepared, ys);
+}
+
+/// Activations quantized once for a group of weight matrices and reusable
+/// across consecutive projections (for example two-stage vocabulary screening).
+pub struct PreparedBatch<'a> {
+    x: &'a [f32],
+    cols: usize,
+    n: usize,
+    xk: Vec<Q8K>,
+    gk: Vec<Q8KGroup>,
+    x32: Vec<Q8>,
+    g32: Vec<Q8Group>,
+}
+
+impl<'a> PreparedBatch<'a> {
+    /// Quantizes `x` once into the forms required by `ws`.
+    pub fn new(ws: &[&Matrix], x: &'a [f32]) -> Self {
+        let cols = ws.first().map_or(0, |w| w.cols);
+        assert!(cols > 0 && x.len().is_multiple_of(cols));
+        let n = x.len() / cols;
+        for w in ws {
+            assert_eq!(w.cols, cols, "weights must share the input width");
+        }
+        let paths: Vec<Path> = ws.iter().map(|w| Path::of(w, n)).collect();
+        let needs = |want: fn(Path) -> bool| paths.iter().any(|&p| want(p));
+        let xk: Vec<Q8K> = if needs(|p| matches!(p, Path::K(_))) {
+            pool::map(n, |t| Q8K::quantize(&x[t * cols..][..cols]))
+        } else {
+            Vec::new()
+        };
+        let gk: Vec<Q8KGroup> = if needs(|p| matches!(p, Path::K(Some(_)))) {
+            pool::map(n.div_ceil(GROUP), |g| {
+                Q8KGroup::new(&xk[g * GROUP..n.min(g * GROUP + GROUP)])
+            })
+        } else {
+            Vec::new()
+        };
+        let x32: Vec<Q8> = if needs(|p| matches!(p, Path::B32(_))) {
+            pool::map(n, |t| Q8::quantize(&x[t * cols..][..cols]))
+        } else {
+            Vec::new()
+        };
+        let g32: Vec<Q8Group> = if needs(|p| matches!(p, Path::B32(Some(_)))) {
+            pool::map(n.div_ceil(GROUP), |g| {
+                Q8Group::new(&x32[g * GROUP..n.min(g * GROUP + GROUP)])
+            })
+        } else {
+            Vec::new()
+        };
+        Self {
+            x,
+            cols,
+            n,
+            xk,
+            gk,
+            x32,
+            g32,
+        }
     }
 
-    let paths: Vec<Path> = ws.iter().map(|w| Path::of(w, n)).collect();
-    let needs = |want: fn(Path) -> bool| paths.iter().any(|&p| want(p));
-    let xk: Vec<Q8K> = if needs(|p| matches!(p, Path::K(_))) {
-        pool::map(n, |t| Q8K::quantize(&x[t * cols..][..cols]))
-    } else {
-        Vec::new()
-    };
-    let gk: Vec<Q8KGroup> = if needs(|p| matches!(p, Path::K(Some(_)))) {
-        pool::map(n.div_ceil(GROUP), |g| {
-            Q8KGroup::new(&xk[g * GROUP..n.min(g * GROUP + GROUP)])
-        })
-    } else {
-        Vec::new()
-    };
-    let x32: Vec<Q8> = if needs(|p| matches!(p, Path::B32(_))) {
-        pool::map(n, |t| Q8::quantize(&x[t * cols..][..cols]))
-    } else {
-        Vec::new()
-    };
-    let g32: Vec<Q8Group> = if needs(|p| matches!(p, Path::B32(Some(_)))) {
-        pool::map(n.div_ceil(GROUP), |g| {
-            Q8Group::new(&x32[g * GROUP..n.min(g * GROUP + GROUP)])
-        })
-    } else {
-        Vec::new()
-    };
+    /// Computes `[|xh|, |xh - xc|, slack * |xc|]` directly from the already
+    /// quantized buffers without extra allocations or re-quantizing `x`.
+    pub fn shortlist_scales(
+        &self,
+        head: &Matrix,
+        copy: &Matrix,
+        slack: f64,
+    ) -> Option<Vec<[f64; 3]>> {
+        let head_path = Path::of(head, self.n);
+        let copy_path = Path::of(copy, self.n);
+        if !matches!(copy_path, Path::K(_)) {
+            return None;
+        }
+        let scales = match head_path {
+            Path::K(_) => (0..self.n)
+                .map(|t| {
+                    let qk = &self.xk[t];
+                    let mut sum = 0.0f64;
+                    for (b, &d) in qk.d.iter().enumerate() {
+                        let d = d as f64;
+                        for &q in &qk.qs[b * QK_K..][..QK_K] {
+                            let v = d * q as f64;
+                            sum += v * v;
+                        }
+                    }
+                    let n = sum.sqrt() * (1.0 + 1e-9);
+                    [n, 0.0, slack * n]
+                })
+                .collect::<Vec<_>>(),
+            Path::B32(_) => (0..self.n)
+                .map(|t| {
+                    let qk = &self.xk[t];
+                    let q32 = &self.x32[t];
+                    let (mut sum_h, mut sum_gap, mut sum_c) = (0.0f64, 0.0f64, 0.0f64);
+                    for (b32, &d32) in q32.d.iter().enumerate() {
+                        let d32 = d32 as f64;
+                        let dk = qk.d[b32 / (QK_K / crate::q8::QK)] as f64;
+                        let start = b32 * crate::q8::QK;
+                        for (&qh, &qc) in q32.qs[start..][..crate::q8::QK]
+                            .iter()
+                            .zip(&qk.qs[start..][..crate::q8::QK])
+                        {
+                            let vh = d32 * qh as f64;
+                            let vc = dk * qc as f64;
+                            let diff = vh - vc;
+                            sum_h += vh * vh;
+                            sum_gap += diff * diff;
+                            sum_c += vc * vc;
+                        }
+                    }
+                    let up = 1.0 + 1e-9;
+                    [
+                        sum_h.sqrt() * up,
+                        sum_gap.sqrt() * up,
+                        slack * sum_c.sqrt() * up,
+                    ]
+                })
+                .collect::<Vec<_>>(),
+            _ => return None,
+        };
+        scales
+            .iter()
+            .flatten()
+            .all(|v| v.is_finite())
+            .then_some(scales)
+    }
+}
+
+fn matmul_targets(ws: &[(&Matrix, Option<&[u32]>)], batch: &PreparedBatch, ys: &mut [&mut [f32]]) {
+    assert_eq!(ws.len(), ys.len());
+    let n = batch.n;
+    for ((w, rows), y) in ws.iter().zip(ys.iter()) {
+        assert_eq!(w.cols, batch.cols, "weights must share the input width");
+        let row_count = rows.map_or(w.rows, |r| r.len());
+        assert_eq!(y.len(), n * row_count);
+        if let Some(indices) = rows {
+            for &r in *indices {
+                assert!((r as usize) < w.rows, "row index {r} out of bounds");
+            }
+        }
+    }
     let input = Input {
-        x,
-        xk: &xk,
-        gk: &gk,
-        x32: &x32,
-        g32: &g32,
+        x: batch.x,
+        xk: &batch.xk,
+        gk: &batch.gk,
+        x32: &batch.x32,
+        g32: &batch.g32,
     };
 
     let tile_tokens = if n == 1 { 1 } else { BATCH_TOKENS };
@@ -99,9 +227,10 @@ pub fn matmul_many(ws: &[&Matrix], x: &[f32], ys: &mut [&mut [f32]]) {
     let mut first = 0;
     let plans: Vec<Plan> = ws
         .iter()
-        .zip(&paths)
         .zip(ys.iter_mut())
-        .map(|((&w, &path), y)| {
+        .map(|(&(w, indices), y)| {
+            let path = Path::of(w, n);
+            let row_count = indices.map_or(w.rows, |idx| idx.len());
             let rows = if n == 1 {
                 ROWS_PER_TASK
             } else if let Some(bytes) = path.unpacked_row_bytes(w) {
@@ -112,15 +241,20 @@ pub fn matmul_many(ws: &[&Matrix], x: &[f32], ys: &mut [&mut [f32]]) {
             };
             let plan = Plan {
                 w,
+                indices,
+                row_count,
                 path,
                 rows,
                 first,
                 out: Out(y.as_mut_ptr()),
             };
-            first += w.rows.div_ceil(rows) * token_tiles;
+            first += row_count.div_ceil(rows) * token_tiles;
             plan
         })
         .collect();
+    if first == 0 {
+        return;
+    }
     pool::for_each(first, &|i| {
         let plan = plans
             .iter()
@@ -134,8 +268,10 @@ pub fn matmul_many(ws: &[&Matrix], x: &[f32], ys: &mut [&mut [f32]]) {
         let (r, t) = (r * plan.rows, t * tile_tokens);
         let tile = Tile {
             w: plan.w,
+            indices: plan.indices,
+            out_stride: plan.row_count,
             path: plan.path,
-            rows: r..plan.w.rows.min(r + plan.rows),
+            rows: r..plan.row_count.min(r + plan.rows),
             tokens: t..n.min(t + tile_tokens),
             out: plan.out,
         };
@@ -151,6 +287,8 @@ thread_local! {
 /// task `first` row tile by row tile.
 struct Plan<'a, 'w> {
     w: &'a Matrix<'w>,
+    indices: Option<&'a [u32]>,
+    row_count: usize,
     path: Path,
     rows: usize,
     first: usize,
@@ -225,6 +363,8 @@ unsafe impl Sync for Out {}
 /// blocks start at multiples of [`GROUP`].
 struct Tile<'a, 'w> {
     w: &'a Matrix<'w>,
+    indices: Option<&'a [u32]>,
+    out_stride: usize,
     path: Path,
     rows: Range<usize>,
     tokens: Range<usize>,
@@ -232,6 +372,10 @@ struct Tile<'a, 'w> {
 }
 
 impl Tile<'_, '_> {
+    fn src_row(&self, r: usize) -> usize {
+        self.indices.map_or(r, |idx| idx[r] as usize)
+    }
+
     fn run(&self, input: &Input, scratch: &mut Scratch) {
         let ty = self.w.ty;
         match self.path {
@@ -259,8 +403,8 @@ impl Tile<'_, '_> {
     fn set(&self, t: usize, r: usize, v: f32) {
         debug_assert!(self.tokens.contains(&t) && self.rows.contains(&r));
         // SAFETY: (t, r) lies inside this tile, which no other tile covers,
-        // and inside the `n * w.rows` output checked by `matmul_many`.
-        unsafe { *self.out.0.add(t * self.w.rows + r) = v }
+        // and inside the `n * self.out_stride` output checked by `matmul_targets`.
+        unsafe { *self.out.0.add(t * self.out_stride + r) = v }
     }
 
     fn run_tiled<U: Block, G>(
@@ -282,7 +426,7 @@ impl Tile<'_, '_> {
         for r in self.rows.clone().step_by(TILE_ROWS) {
             let quad = r..self.rows.end.min(r + TILE_ROWS);
             for (r, out) in quad.clone().zip(unpacked.chunks_exact_mut(blocks)) {
-                (kernel.unpack)(w.row(r), out);
+                (kernel.unpack)(w.row(self.src_row(r)), out);
             }
             let row = |i: usize| &unpacked[i * blocks..][..blocks];
             for (g, x) in groups.iter().enumerate() {
@@ -324,7 +468,7 @@ impl Tile<'_, '_> {
                     let take = left.min(4);
                     let x = &xq[t..t + take];
                     for r in self.rows.clone() {
-                        let row = w.row(r);
+                        let row = w.row(self.src_row(r));
                         let v = match take {
                             4 => dot4(row, [&x[0], &x[1], &x[2], &x[3]]),
                             3 => pad(dot3(row, [&x[0], &x[1], &x[2]])),
@@ -338,7 +482,7 @@ impl Tile<'_, '_> {
                 }
                 _ => {
                     for r in self.rows.clone() {
-                        self.set(t, r, dot(w.row(r), &xq[t]));
+                        self.set(t, r, dot(w.row(self.src_row(r)), &xq[t]));
                     }
                     1
                 }
@@ -363,7 +507,8 @@ impl Tile<'_, '_> {
                 } else {
                     1
                 };
-                let rows: [&[u8]; fdot::ROWS] = std::array::from_fn(|i| w.row(r + i.min(take - 1)));
+                let rows: [&[u8]; fdot::ROWS] =
+                    std::array::from_fn(|i| w.row(self.src_row(r + i.min(take - 1))));
                 let v = fdot::dots(w.ty, &rows[..take], &xs[..len]);
                 for (i, v) in v[..take].iter().enumerate() {
                     for (j, &v) in v[..len].iter().enumerate() {
@@ -379,7 +524,7 @@ impl Tile<'_, '_> {
         let w = self.w;
         row.resize(w.cols, 0.0);
         for r in self.rows.clone() {
-            dequantize(w.ty, w.row(r), row).expect("unsupported weight type");
+            dequantize(w.ty, w.row(self.src_row(r)), row).expect("unsupported weight type");
             for t in self.tokens.clone() {
                 self.set(t, r, ops::dot(row, &x[t * w.cols..][..w.cols]));
             }
@@ -511,5 +656,37 @@ mod tests {
         matmul(&wa, &x, &mut za);
         matmul(&wb, &x, &mut zb);
         assert_eq!((ya, yb), (za, zb));
+    }
+
+    #[test]
+    fn matmul_indexed_matches_full_rows_bit_for_bit() {
+        let mut rng = Lcg(7);
+        let rows = 37;
+        let indices = [31u32, 0, 17, 5, 36, 12, 2, 19, 24];
+        for (ty, cols) in [
+            (TensorType::Q6K, 2 * QK_K),
+            (TensorType::Q8_0, 2 * QK_K),
+            (TensorType::Q4K, 2 * QK_K),
+            (TensorType::F16, 256),
+        ] {
+            let data = random_row(ty, rows * cols / ty.block_len(), &mut rng);
+            let w = Matrix::new(ty, &data, rows, cols);
+            for n in [1usize, 11] {
+                let x: Vec<f32> = (0..n * cols).map(|_| rng.f32() * 2.0).collect();
+                let mut full = vec![0.0; n * rows];
+                matmul(&w, &x, &mut full);
+                let mut got = vec![0.0; n * indices.len()];
+                matmul_indexed(&w, &indices, &x, &mut got);
+                for t in 0..n {
+                    for (local, &r) in indices.iter().enumerate() {
+                        assert_eq!(
+                            got[t * indices.len() + local].to_bits(),
+                            full[t * rows + r as usize].to_bits(),
+                            "{ty} n={n} t={t} row={r}"
+                        );
+                    }
+                }
+            }
+        }
     }
 }

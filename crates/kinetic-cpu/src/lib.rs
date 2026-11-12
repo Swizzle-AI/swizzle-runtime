@@ -18,7 +18,9 @@ use kinetic_quant::{dequantize, Matrix};
 use rayon::prelude::*;
 
 pub use kernel_input::kernel_input;
-pub use matmul::{matmul, matmul_many};
+pub use matmul::{
+    matmul, matmul_indexed, matmul_indexed_prepared, matmul_many, matmul_prepared, PreparedBatch,
+};
 pub use ops::*;
 pub use q8k::Q8K;
 
