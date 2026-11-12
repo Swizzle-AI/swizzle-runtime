@@ -19,19 +19,19 @@ const QUANT_TILES: [Tile; 3] = [
         rows: 64,
         inputs: 32,
         threads: 256,
-        shared: 33_792,
+        shared: 30_720,
     },
     Tile {
         rows: 64,
         inputs: 64,
         threads: 256,
-        shared: 45_056,
+        shared: 40_960,
     },
     Tile {
         rows: 128,
         inputs: 128,
         threads: 512,
-        shared: 90_112,
+        shared: 81_920,
     },
 ];
 /// f16 weights on tensor cores; must match GEMMH_* in gemm_float.cuh.
