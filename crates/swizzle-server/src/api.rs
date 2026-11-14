@@ -640,7 +640,7 @@ mod tests {
                 {"type": "image_url", "image_url": {"url": url}},
             ]}])
         };
-        let ok = image("data:image/png;base64,S2luZXRpYw==");
+        let ok = image("data:image/png;base64,U3dpenpsZQ==");
         validate_messages(ok.as_array().unwrap()).unwrap();
         assert_eq!(
             images(ok.as_array().unwrap()).unwrap(),

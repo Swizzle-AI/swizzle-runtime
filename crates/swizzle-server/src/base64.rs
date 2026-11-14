@@ -53,8 +53,8 @@ mod tests {
     fn known_encodings() {
         // 1.0f32 is 00 00 80 3f.
         assert_eq!(encode(&1.0f32.to_le_bytes()), "AACAPw==");
-        assert_eq!(encode(b"Swizzle"), "S2luZXRpYw==");
-        assert_eq!(encode(b"Kin"), "S2lu");
+        assert_eq!(encode(b"Swizzle"), "U3dpenpsZQ==");
+        assert_eq!(encode(b"Swi"), "U3dp");
     }
 
     #[test]
@@ -63,7 +63,7 @@ mod tests {
             let bytes: Vec<u8> = (0..len).map(|i| (i * 37 + 11) as u8).collect();
             assert_eq!(decode(&encode(&bytes)).unwrap(), bytes);
         }
-        assert_eq!(decode("S2lu\nZXRpYw").unwrap(), b"Swizzle");
+        assert_eq!(decode("U3dp\nenpsZQ").unwrap(), b"Swizzle");
         assert_eq!(decode("S2l*"), None);
         assert_eq!(decode("S"), None);
     }

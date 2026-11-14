@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn messages_carry_images_tools_and_thinking() {
         let m = openai_messages(&[
-            json!({"role": "user", "content": "What is this?", "images": ["S2luZXRpYw=="]}),
+            json!({"role": "user", "content": "What is this?", "images": ["U3dpenpsZQ=="]}),
             json!({"role": "assistant", "content": "", "thinking": "hm",
                    "tool_calls": [{"function": {"name": "f", "arguments": {"x": 1}}}]}),
             json!({"role": "tool", "content": "42", "tool_name": "f"}),
@@ -267,7 +267,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             m[0]["content"][1]["image_url"]["url"],
-            "data:image;base64,S2luZXRpYw=="
+            "data:image;base64,U3dpenpsZQ=="
         );
         assert_eq!(api::images(&m).unwrap(), [b"Swizzle".to_vec()]);
         assert_eq!(m[1]["reasoning_content"], "hm");
