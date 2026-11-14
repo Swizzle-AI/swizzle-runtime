@@ -161,7 +161,7 @@ fn bare_names_take_the_latest_tag_and_misses_suggest_close_ones() {
 
     let err = find("qwen-3").unwrap_err().to_string();
     assert!(err.contains("did you mean qwen3:4b, qwen3:latest"), "{err}");
-    assert!(err.contains("swizzle pull"), "{err}");
+    assert!(err.contains("swizzle-rt pull"), "{err}");
     let err = find("llama3.2:3b").unwrap_err().to_string();
     assert!(err.contains("llama3.2:1b"), "{err}");
 }

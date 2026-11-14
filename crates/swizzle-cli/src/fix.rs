@@ -44,7 +44,7 @@ mod tests {
                 "x.gguf: The system cannot find the file specified. (os error 2)",
                 "check the path",
             ),
-            ("architecture mamba3 is not supported yet", "swizzle models"),
+            ("architecture mamba3 is not supported yet", "swizzle-rt models"),
             (
                 "cuMemAlloc failed: CUDA_ERROR_OUT_OF_MEMORY (2)",
                 "smaller model",
@@ -61,7 +61,7 @@ mod tests {
             ),
             ("m.gguf: not a GGUF file", "download it again"),
             ("tensor blk.0 has unknown type id 99", "Q4_K_M"),
-            ("bge is an encoder; load it with Embedder", "swizzle serve"),
+            ("bge is an encoder; load it with Embedder", "swizzle-rt serve"),
             (
                 "1.0 GiB is free there; the download needs 2.5 GiB and 2 GiB to spare",
                 "--dir",

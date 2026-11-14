@@ -3,10 +3,10 @@
 //! attention, and a merger that projects each 2x2 block of patches to one
 //! language-model embedding.
 
+use rayon::prelude::*;
 use swizzle_cpu::matmul_many;
 use swizzle_gguf::Value;
 use swizzle_quant::Matrix;
-use rayon::prelude::*;
 
 #[cfg(feature = "cuda")]
 mod cuda;
