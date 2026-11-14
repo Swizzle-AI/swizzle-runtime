@@ -714,4 +714,16 @@ mod tests {
         assert!(sse_text.contains("data: {\"id\":\"open\"}\n\n"));
         assert!(sse_text.contains("data: {\"id\":\"delta\"}\n\n"));
     }
+
+    #[test]
+    fn models_endpoint_returns_openai_list_schema() {
+        let out = models("Qwen3-0.6B-Q8_0.gguf", 32768);
+        assert_eq!(out["object"], "list");
+        let entry = &out["data"][0];
+        assert_eq!(entry["id"], "Qwen3-0.6B-Q8_0.gguf");
+        assert_eq!(entry["object"], "model");
+        assert_eq!(entry["owned_by"], "swizzle-runtime");
+        assert_eq!(entry["context_length"], 32768);
+        assert!(entry["created"].as_u64().is_some());
+    }
 }

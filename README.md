@@ -20,6 +20,10 @@ Written in pure Rust with custom x86-64 AVX2/F16C, NVIDIA CUDA (`sm_75`–`sm_12
 
 **[Swizzle AI](https://github.com/Swizzle-AI)** &emsp; **[Architecture](docs/src/how-it-is-fast.md)** &emsp; **[Benchmarks](docs/src/benchmarks.md)**
 
+<br>
+
+<img src="assets/swizzle_demo.gif" alt="Swizzle Runtime vs llama.cpp Side-by-Side Terminal Demo" width="100%" />
+
 </div>
 
 ---
@@ -44,10 +48,18 @@ Every speed-up preserves deterministic greedy output and reproducible inference 
 
 ## Quick Start
 
-### One-Command Install (Linux x86_64 CUDA 12.8)
+### One-Command Install
+
+**Linux x86_64 (CUDA 12.8):**
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Swizzle-AI/swizzle-runtime/main/install.sh | sh
+```
+
+**Windows x86_64 (PowerShell):**
+
+```powershell
+irm https://raw.githubusercontent.com/Swizzle-AI/swizzle-runtime/main/install.ps1 | iex
 ```
 
 ### Run with Docker (GHCR)
