@@ -1,0 +1,12 @@
+[package]
+name = "swizzle-tokenizer"
+description = "BPE, SentencePiece and WordPiece tokenizers for GGUF models"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+swizzle-gguf = { path = "../swizzle-gguf" }
+unicode-general-category = "1.1.0"
+unicode-normalization = "0.1.25"

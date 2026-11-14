@@ -18,7 +18,7 @@ WORKDIR /src
 # Only the sources: rust-toolchain.toml would make rustup fetch another toolchain.
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
-RUN cargo build --release --locked -p kinetic-cli --features cuda
+RUN cargo build --release --locked -p swizzle-cli --features cuda
 
 # Swizzle Runtime opens the driver API at runtime and needs no CUDA libraries of its own.
 FROM nvidia/cuda:${CUDA_VERSION}-base-ubuntu24.04

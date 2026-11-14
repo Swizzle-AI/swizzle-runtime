@@ -1,0 +1,12 @@
+[package]
+name = "swizzle-cpu"
+description = "CPU kernels"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+half.workspace = true
+swizzle-quant = { path = "../swizzle-quant" }
+rayon.workspace = true

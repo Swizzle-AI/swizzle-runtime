@@ -15,7 +15,7 @@ busy with different long requests, and hashes every answer. LFM3-1.7B
 Q4_K_M on a Ryzen 5 6600H, CPU only, both servers with `--parallel 4`:
 
 ```text
-Swizzle Runtime, kinetic serve --parallel 4
+Swizzle Runtime, swizzle-rt serve --parallel 4
 run  answer (first 40 characters)                sha256 of the full answer
   1  **Lunar Lattice Café** — its name evokes    070ad8ff1e6fc95f
   2  **Lunar Lattice Café** — its name evokes    070ad8ff1e6fc95f
@@ -50,12 +50,12 @@ the others changes how its sums are rounded, and sampling turns a tiny
 difference into another token. Run it yourself:
 
 ```sh
-python scripts/same_answer_demo.py --model LFM3-1.7B-Q4_K_M.gguf \n    --kinetic kinetic --kinetic-args "--device cpu" --receipt last.json \n    --llama-server llama-server --llama-args "-dev none -ngl 0 -c 16384"
+python scripts/same_answer_demo.py --model LFM3-1.7B-Q4_K_M.gguf \n    --swizzle swizzle --swizzle-args "--device cpu" --receipt last.json \n    --llama-server llama-server --llama-args "-dev none -ngl 0 -c 16384"
 ```
 
 The receipt of Swizzle Runtime's last run, made on the busy server, then verifies
 as identical when rerun alone with drafting off. On an RTX 3060 Laptop GPU
-(`--kinetic-args "--device cuda"`, class `cuda-sm86`) Swizzle Runtime also gives one
+(`--swizzle-args "--device cuda"`, class `cuda-sm86`) Swizzle Runtime also gives one
 distinct answer in ten runs, and that receipt verifies the same way.
 
 Making inference batch-invariant is not a new idea: it has been described
@@ -66,10 +66,10 @@ cache, several users and run-ahead, at full speed.
 ## Making a receipt
 
 ```sh
-kinetic run model.gguf "Name three rivers." --temp 0.8 --seed 42 --receipt answer.json
+swizzle-rt run model.gguf "Name three rivers." --temp 0.8 --seed 42 --receipt answer.json
 ```
 
-In `kinetic chat`, `/receipt answer.json` saves the receipt of the last
+In `swizzle-rt chat`, `/receipt answer.json` saves the receipt of the last
 answer. On the server, `"receipt": true` on `/v1/chat/completions` or
 `/v1/completions` adds a `receipt` object to the response; see
 [Server API](server.md#receipts). A request without a seed gets a fresh one,
@@ -80,7 +80,7 @@ A real receipt, signed:
 ```json
 {
   "receipt": 1,
-  "kinetic": {
+  "swizzle": {
     "version": "0.1.0",
     "build": "378534cb64f30a15"
   },
@@ -139,8 +139,8 @@ A real receipt, signed:
 
 | Field | Holds |
 |---|---|
-| `kinetic` | the version, and the build: the first 16 hex digits of the BLAKE3 of the `kinetic` executable, which pins every kernel compiled into it |
-| `model` | the model file's name, path, size and BLAKE3; the hash is cached by path, size and modification time in `kinetic/hashes.json` in the user's cache directory, so a large file is hashed once |
+| `swizzle` | the version, and the build: the first 16 hex digits of the BLAKE3 of the `swizzle` executable, which pins every kernel compiled into it |
+| `model` | the model file's name, path, size and BLAKE3; the hash is cached by path, size and modification time in `swizzle/hashes.json` in the user's cache directory, so a large file is hashed once |
 | `device` | the device class that decides the bits (`cpu-x86_64-avx2`, `cpu-x86_64-scalar`, `cuda-sm86`, `vulkan-<GPU>`), its name, and load settings that change the bits: the context size, a quantized CUDA cache, `--gpu-layers`, rotary overrides |
 | `input` | the chat messages or the prompt text, as sent |
 | `prompt` | the exact tokens the model was given, with their count and BLAKE3 |
@@ -153,7 +153,7 @@ Token hashes are BLAKE3 over the ids as little-endian 32-bit integers.
 ## Verifying
 
 ```sh
-kinetic verify-receipt answer.json
+swizzle-rt verify-receipt answer.json
 ```
 
 ```text
@@ -176,8 +176,8 @@ elsewhere.
 
 ```sh
 openssl rand -hex 32 > receipt.key
-kinetic run model.gguf "Name three rivers." --receipt answer.json --sign-key receipt.key
-kinetic serve model.gguf --sign-key receipt.key
+swizzle-rt run model.gguf "Name three rivers." --receipt answer.json --sign-key receipt.key
+swizzle-rt serve model.gguf --sign-key receipt.key
 ```
 
 The key file holds an Ed25519 secret key as 32 bytes or 64 hex digits; keep

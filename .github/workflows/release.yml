@@ -54,8 +54,8 @@ jobs:
         run: |
           features=(--no-default-features)
           if [ "${{ matrix.variant }}" = cuda ]; then features=(--features cuda); fi
-          cargo build --release --locked -p kinetic-cli "${features[@]}"
-          cargo build --release --locked -p kinetic-capi
+          cargo build --release --locked -p swizzle-cli "${features[@]}"
+          cargo build --release --locked -p swizzle-capi
 
       - name: Check the binary
         shell: bash
@@ -71,13 +71,13 @@ jobs:
           name="swizzle-rt-${version}-${{ matrix.target }}-${{ matrix.variant }}"
           mkdir -p "$name/include" "$name/lib"
           cp LICENSE NOTICE README.md "$name/"
-          cp crates/kinetic-capi/include/kinetic.h "$name/include/"
+          cp crates/swizzle-capi/include/swizzle.h "$name/include/"
           if [ "$RUNNER_OS" = Windows ]; then
             cp target/release/swizzle-rt.exe "$name/"
-            cp target/release/kinetic_capi.dll target/release/kinetic_capi.dll.lib "$name/lib/"
+            cp target/release/swizzle_capi.dll target/release/swizzle_capi.dll.lib "$name/lib/"
           else
             cp target/release/swizzle-rt "$name/"
-            cp target/release/libkinetic_capi.so "$name/lib/"
+            cp target/release/libswizzle_capi.so "$name/lib/"
           fi
           (cd "$name" && find . -type f ! -name SHA256SUMS | sort | xargs sha256sum > SHA256SUMS)
           if [ "$RUNNER_OS" = Windows ]; then

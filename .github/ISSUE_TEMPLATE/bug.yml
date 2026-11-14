@@ -21,13 +21,13 @@ body:
       label: Command
       description: The exact command you ran, or the request you sent to the server.
       render: shell
-      placeholder: kinetic run model.gguf "Hello" --temp 0
+      placeholder: swizzle-rt run model.gguf "Hello" --temp 0
     validations:
       required: true
   - type: textarea
     id: info
     attributes:
-      label: Output of `kinetic info <model>`
+      label: Output of `swizzle-rt info <model>`
       render: text
     validations:
       required: true
@@ -35,8 +35,8 @@ body:
     id: version
     attributes:
       label: Swizzle Runtime version
-      description: Output of `kinetic --version`, and how you installed it (release archive, pip, Docker, source).
-      placeholder: kinetic 0.1.0, windows-x86_64-cuda archive
+      description: Output of `swizzle --version`, and how you installed it (release archive, pip, Docker, source).
+      placeholder: swizzle 0.1.0, windows-x86_64-cuda archive
     validations:
       required: true
   - type: input

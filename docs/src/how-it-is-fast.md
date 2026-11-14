@@ -53,7 +53,7 @@ side and lets whichever has lately been right most propose the next draft:
   multi-token prediction (MTP) layers next to the main model (Gloeckle et
   al., 2024; DeepSeek-V3), as Qwen3.5 does. Swizzle Runtime runs that block to draft
   from the model's hidden state, in the spirit of Medusa (Cai et al., 2024)
-  and EAGLE (Li et al., 2024). `kinetic info` shows `prediction yes` for such
+  and EAGLE (Li et al., 2024). `swizzle-rt info` shows `prediction yes` for such
   files.
 
 A draft can branch into a tree of alternatives, all checked in the same
@@ -81,7 +81,7 @@ numbers as running it alone. Swizzle Runtime's kernels are written to be
 batch-invariant, bit for bit, and every architecture is tested for it: a
 batch must give the logits its tokens give one by one, a tree row the logits
 of its path alone, and drafted decoding the tokens of plain decoding.
-`kinetic bench` repeats the last check on your machine and prints
+`swizzle-rt bench` repeats the last check on your machine and prints
 `drafted output identical to plain decoding: yes`.
 
 ## Warm Start
@@ -133,7 +133,7 @@ running     [history][user: <pasted document> What does the]           ahead, in
 after Enter                                          [ second section say?][assistant]
 ```
 
-`kinetic chat` sends every edit to a thread that runs the conversation up
+`swizzle-rt chat` sends every edit to a thread that runs the conversation up
 to just before the last word of the message (its tokens may still merge
 with the next keystroke) and never the end of the turn. Apps do the same
 through [`/v1/prefill`](server.md#prefill).

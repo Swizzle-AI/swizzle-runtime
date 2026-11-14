@@ -1,7 +1,7 @@
 # Command line
 
 ```text
-kinetic <COMMAND> [OPTIONS] [MODEL] ...
+swizzle <COMMAND> [OPTIONS] [MODEL] ...
 ```
 
 | Command | Does |
@@ -20,16 +20,16 @@ kinetic <COMMAND> [OPTIONS] [MODEL] ...
 | [`quantize`](#quantize) | writes a GGUF model in another type, as `llama-quantize` does |
 | [`perplexity`](#perplexity) | measures perplexity and KL divergence over a text file, as `llama-perplexity` does |
 
-`kinetic` alone in a terminal checks the computer, lists two or three models
+`swizzle` alone in a terminal checks the computer, lists two or three models
 that run well on it with their size and expected speed, models already on
 disk first, and waits for one key: `1`-`3` or Enter picks, `q` quits. A model
 not on disk yet is downloaded as [`pull`](#pull) does, then [`chat`](#chat)
 opens. Nothing is downloaded before you pick. With input or output
-redirected, `kinetic` prints the help as before.
+redirected, `swizzle` prints the help as before.
 
 Every command except `verify` and `verify-receipt` takes the model as its first argument or with
-`-m`/`--model`, as a `.gguf` or `.ktc` file. `kinetic --version` prints the
-version and `kinetic <command> --help` the options of a command.
+`-m`/`--model`, as a `.gguf` or `.ktc` file. `swizzle --version` prints the
+version and `swizzle <command> --help` the options of a command.
 
 Swizzle Runtime exits with 0 on success, 1 when the command fails (a missing file, a
 model that cannot load) and 2 for an invalid command line, including a
@@ -38,9 +38,9 @@ llama.cpp flag it does not take; see [llama.cpp flags](llama-flags.md).
 ## run
 
 ```sh
-kinetic run model.gguf "Explain recursion in two sentences."
-kinetic run -m model.gguf -p "Explain recursion."
-kinetic run model.gguf < prompt.txt
+swizzle-rt run model.gguf "Explain recursion in two sentences."
+swizzle-rt run -m model.gguf -p "Explain recursion."
+swizzle-rt run model.gguf < prompt.txt
 ```
 
 The prompt goes through the model's chat template as one user message, after
@@ -54,7 +54,7 @@ and of the prompt, and the device:
 ```
 
 When stdout goes to a file or a pipe, the speed is also shown live on
-stderr. Only the answer goes to stdout, so `kinetic run ... > answer.txt`
+stderr. Only the answer goes to stdout, so `swizzle-rt run ... > answer.txt`
 captures just the text.
 
 `--receipt FILE` also writes a [receipt](receipts.md) for the answer: the
@@ -63,8 +63,8 @@ setting with the seed, and the output tokens. Without `--seed`, a fresh seed
 is picked and recorded.
 
 ```sh
-kinetic run model.gguf "Name three rivers." --temp 0.8 --receipt answer.json
-kinetic verify-receipt answer.json
+swizzle-rt run model.gguf "Name three rivers." --temp 0.8 --receipt answer.json
+swizzle-rt verify-receipt answer.json
 ```
 
 ### Generation options
@@ -108,7 +108,7 @@ seeded answer is the same for the same seed.
 | `-t`, `--threads <N>` | CPU threads [default: all] |
 | `--device <auto\|cpu\|cuda\|vulkan>` | where the model runs; `auto` tries CUDA, then Vulkan, then the CPU [default: auto]; see [Devices](devices.md) |
 | `--gpu-layers <N>` | most layers on the GPU, the rest on the CPU [default: as many as fit]; see [Devices](devices.md#dense-models-larger-than-the-gpu) |
-| `--cache-dir <DIR>` | where Warm Start keeps prompt states [default: `kinetic/warm` in the user's cache directory] |
+| `--cache-dir <DIR>` | where Warm Start keeps prompt states [default: `swizzle/warm` in the user's cache directory] |
 | `--no-prompt-cache` | run every prompt from its first token; same as `--off warm-start` |
 | `--off <LIST>` | turn speed technologies off, comma-separated: `rad1`, `warm-start`, `zero-wait`, `shortlist`, `torque`, `convoy` |
 | `--cache-type-k <f16\|q8_0>`, `--cache-type-v <f16\|q8_0>` | how the CUDA cache stores keys and values; `q8_0` takes about half the memory but changes outputs [default: f16]; see [Devices](devices.md#memory) |
@@ -130,7 +130,7 @@ change`, rather than moving layers to the CPU. An explicit `-c` always wins.
 
 Every speed technology is exact, so `--off` changes only speed: use it to
 measure what each one gives, or to rule one out when reporting a bug.
-`kinetic serve` prints which run on the device it picked, for example
+`swizzle-rt serve` prints which run on the device it picked, for example
 `Speed technologies on: RAD-1, Warm Start, Zero Wait, Torque, Convoy; off: Shortlist`.
 
 ### LoRA adapters
@@ -146,7 +146,7 @@ while an adapter is in use.
 ## chat
 
 ```sh
-kinetic chat model.gguf --system "You are a concise assistant."
+swizzle-rt chat model.gguf --system "You are a concise assistant."
 ```
 
 Reads one message per line; end a line with `\` to go on writing on the
@@ -183,9 +183,9 @@ each answer, which is handy for scripted tests. Takes the
 ## serve
 
 ```sh
-kinetic serve model.gguf
-kinetic serve model.gguf --port 9000 -c 8192
-kinetic serve Qwen3.5-4B-Q4_K_M.gguf --mmproj Qwen3.5-4B-mmproj-F16.gguf
+swizzle-rt serve model.gguf
+swizzle-rt serve model.gguf --port 9000 -c 8192
+swizzle-rt serve Qwen3.5-4B-Q4_K_M.gguf --mmproj Qwen3.5-4B-mmproj-F16.gguf
 ```
 
 | Option | Meaning |
@@ -223,8 +223,8 @@ other computers, which Swizzle Runtime warns about; pair it with `--api-key`.
 ## bench
 
 ```sh
-kinetic bench model.gguf
-kinetic bench model.gguf --device cpu -t 6 -r 5 --json
+swizzle-rt bench model.gguf
+swizzle-rt bench model.gguf --device cpu -t 6 -r 5 --json
 ```
 
 | Option | Meaning |
@@ -296,7 +296,7 @@ and exits with 1; please [report it](https://github.com/Swizzle-AI/swizzle-runti
 ## info
 
 ```sh
-kinetic info model.gguf
+swizzle-rt info model.gguf
 ```
 
 Name, architecture and whether Swizzle Runtime supports it, size and parameter
@@ -309,7 +309,7 @@ It reads only the file's header, so it is instant even for large files. See
 ## verify
 
 ```sh
-kinetic verify model.ktc
+swizzle-rt verify model.ktc
 ```
 
 Recomputes the BLAKE3 hash of every section of a `.ktc` file and reports
@@ -318,8 +318,8 @@ whether it is signed. Exits with 1 when any hash does not match.
 ## verify-receipt
 
 ```sh
-kinetic verify-receipt answer.json
-kinetic verify-receipt answer.json --model other/path/model.gguf --device cpu
+swizzle-rt verify-receipt answer.json
+swizzle-rt verify-receipt answer.json --model other/path/model.gguf --device cpu
 ```
 
 Checks a [receipt](receipts.md): the token hashes and, if it is signed, the
@@ -341,7 +341,7 @@ rerun:     identical, 18 of 18 output tokens on cpu-x86_64-avx2 (BLAKE3 7bd06323
 ## quantize
 
 ```sh
-kinetic quantize model-f16.gguf model-Q4_K_M.gguf Q4_K_M
+swizzle quantize model-f16.gguf model-Q4_K_M.gguf Q4_K_M
 ```
 
 Reads a GGUF model with F32, F16, BF16 or Q8_0 weights and writes it as
@@ -357,9 +357,9 @@ Importance matrices (`--imatrix`) are not read yet.
 ## perplexity
 
 ```sh
-kinetic perplexity model.gguf wiki.test.raw -c 512
-kinetic perplexity model-f16.gguf wiki.test.raw --chunks 20 --kl-divergence-base base.kld
-kinetic perplexity model-Q4_K_M.gguf --kl-divergence base.kld
+swizzle perplexity model.gguf wiki.test.raw -c 512
+swizzle perplexity model-f16.gguf wiki.test.raw --chunks 20 --kl-divergence-base base.kld
+swizzle perplexity model-Q4_K_M.gguf --kl-divergence base.kld
 ```
 
 Scores the text as `llama-perplexity` does: the tokens are cut into chunks
@@ -375,20 +375,20 @@ token agrees. Runs on the CPU; `-t` sets the threads.
 ## models
 
 ```sh
-kinetic models
-kinetic run qwen3:4b "Hi"
-kinetic serve lmstudio-community/Qwen3-4B-GGUF:Q4_K_M
+swizzle-rt models
+swizzle-rt run qwen3:4b "Hi"
+swizzle-rt serve lmstudio-community/Qwen3-4B-GGUF:Q4_K_M
 ```
 
 Lists the GGUF models already on this computer: Swizzle Runtime's own folder
-(`KINETIC_MODELS`, or `%LOCALAPPDATA%\kinetic\models` and
-`~/.local/share/kinetic/models`), Ollama's store (`OLLAMA_MODELS` or
+(`SWIZZLE_MODELS`, or `%LOCALAPPDATA%\swizzle\models` and
+`~/.local/share/swizzle/models`), Ollama's store (`OLLAMA_MODELS` or
 `~/.ollama/models`), LM Studio's (`~/.lmstudio/models`), the Hugging Face
 cache (`HF_HUB_CACHE`, `HF_HOME`), llama.cpp's (`LLAMA_CACHE`) and, on
 Windows, `C:\models`. Only file headers are read.
 
 ```text
-NAME                                     SIZE  QUANT     ARCH            RUNS ON KINETIC         FROM
+NAME                                     SIZE  QUANT     ARCH            RUNS ON SWIZZLE         FROM
 LFM3-1.7B-Q4_K_M                     1.02 GiB  Q4_K_M    lfm3            yes                     folder
 gemma-4-E2B_q4_0-it                  3.12 GiB  Q4_0      gemma4          no                      folder
 ```
@@ -401,9 +401,9 @@ picks up the vision projector stored with the model.
 ## pull
 
 ```sh
-kinetic pull ggml-org/gemma-3-1b-it-GGUF
-kinetic pull unsloth/Qwen3-4B-GGUF:Q4_K_M
-kinetic pull org/repo --file model-Q8_0.gguf --no-mmproj
+swizzle-rt pull ggml-org/gemma-3-1b-it-GGUF
+swizzle-rt pull unsloth/Qwen3-4B-GGUF:Q4_K_M
+swizzle-rt pull org/repo --file model-Q8_0.gguf --no-mmproj
 ```
 
 Downloads a GGUF model from Hugging Face into Swizzle Runtime's models folder (or
@@ -418,7 +418,7 @@ checked against the SHA256 that Hugging Face publishes and are renamed into
 place only when they match. `HF_TOKEN` is sent for gated repositories and
 `HF_ENDPOINT` names a mirror. The transfer runs through the system's `curl`.
 
-Swizzle Runtime never connects to the network, except when you run `kinetic pull`;
+Swizzle Runtime never connects to the network, except when you run `swizzle-rt pull`;
 `run`, `chat`, `serve` and the others never download anything.
 
 When a command fails, the error ends with a line saying what to do: a path
@@ -428,7 +428,7 @@ download to repeat.
 ## doctor
 
 ```sh
-kinetic doctor
+swizzle-rt doctor
 ```
 
 One screen with the operating system, the CPU and its AVX2, FMA and F16C
@@ -443,8 +443,8 @@ Swizzle Runtime 0.1.0
   memory   15.2 GiB, 6.4 GiB available, reads at 40 GB/s (measured)
   gpu      NVIDIA GeForce RTX 3060 Laptop GPU via CUDA: 5.0 of 6.0 GiB free, 336 GB/s nominal; CUDA 13.3, compute 8.6
   gpu      NVIDIA GeForce RTX 3060 Laptop GPU via Vulkan: 5.9 GiB; NVIDIA 610.62, Vulkan 1.4.341
-  models   4 found, 1 that Swizzle Runtime runs (`kinetic models` lists them)
-  disk     7.1 GiB free for C:\Users\me\AppData\Local\kinetic\models
+  models   4 found, 1 that Swizzle Runtime runs (`swizzle-rt models` lists them)
+  disk     7.1 GiB free for C:\Users\me\AppData\Local\swizzle\models
 
 To fix:
   - under 10 GiB of disk is free where models are kept
@@ -453,15 +453,15 @@ To fix:
 ## fit
 
 ```sh
-kinetic fit
-kinetic fit qwen3:4b
-kinetic fit D:\models
+swizzle fit
+swizzle fit qwen3:4b
+swizzle fit D:\models
 ```
 
 For every model found, or the one or the folder given: whether it fits
 wholly on the GPU, needs its experts kept on the CPU (mixture-of-experts
 models), or runs on the CPU, with a decode speed range estimated from the
-bytes it reads per token and the memory bandwidth. `kinetic bench` measures
+bytes it reads per token and the memory bandwidth. `swizzle-rt bench` measures
 the real speed.
 
 ```text
@@ -472,8 +472,8 @@ LFM3-1.7B-Q4_K_M                     1.02 GiB  GPU                   169-262 t/s
 ## bench --compare
 
 ```sh
-kinetic bench model.gguf --compare
-kinetic bench model.gguf --compare C:\llama.cpp\llama-bench.exe --json
+swizzle-rt bench model.gguf --compare
+swizzle-rt bench model.gguf --compare C:\llama.cpp\llama-bench.exe --json
 ```
 
 Runs Swizzle Runtime's bench and then llama.cpp's own `llama-bench` on the same file

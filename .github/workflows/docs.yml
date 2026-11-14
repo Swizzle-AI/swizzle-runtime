@@ -7,14 +7,14 @@ on:
     paths:
       - "docs/**"
       - "CHANGELOG.md"
-      - "crates/kinetic-cli/src/llama_flags.rs"
+      - "crates/swizzle-cli/src/llama_flags.rs"
       - "scripts/llama_flags_doc.py"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
       - "docs/**"
       - "CHANGELOG.md"
-      - "crates/kinetic-cli/src/llama_flags.rs"
+      - "crates/swizzle-cli/src/llama_flags.rs"
       - "scripts/llama_flags_doc.py"
   workflow_dispatch:
 

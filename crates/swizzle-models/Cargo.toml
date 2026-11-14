@@ -1,0 +1,47 @@
+[package]
+name = "swizzle-models"
+description = "Model architectures"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+cuda = ["dep:swizzle-cuda"]
+vulkan = ["dep:swizzle-vulkan"]
+
+[dependencies]
+half.workspace = true
+swizzle-cpu = { path = "../swizzle-cpu" }
+swizzle-cuda = { path = "../swizzle-cuda", optional = true }
+swizzle-gguf = { path = "../swizzle-gguf" }
+swizzle-quant = { path = "../swizzle-quant" }
+swizzle-vulkan = { path = "../swizzle-vulkan", optional = true }
+rayon.workspace = true
+
+[dev-dependencies]
+swizzle-tokenizer = { path = "../swizzle-tokenizer" }
+
+[[example]]
+name = "cuda_parity"
+required-features = ["cuda"]
+
+[[example]]
+name = "cuda_prefill"
+required-features = ["cuda"]
+
+[[example]]
+name = "cuda_speculative"
+required-features = ["cuda"]
+
+[[example]]
+name = "vulkan_parity"
+required-features = ["vulkan"]
+
+[[example]]
+name = "vulkan_bench"
+required-features = ["vulkan"]
+
+[[example]]
+name = "flywheel"
+required-features = ["cuda"]

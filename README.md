@@ -49,19 +49,19 @@ Every speed-up preserves deterministic greedy output and reproducible inference 
 CPU + Vulkan (no CUDA toolkit required; CUDA driver opened dynamically when built with `nvcc`):
 
 ```sh
-cargo build --release --locked -p kinetic-cli
+cargo build --release --locked -p swizzle-cli
 ```
 
 CPU-only build:
 
 ```sh
-cargo build --release --locked -p kinetic-cli --no-default-features
+cargo build --release --locked -p swizzle-cli --no-default-features
 ```
 
 With CUDA support (requires `nvcc` 12.8+ for full `sm_75`..`sm_120` fatbins):
 
 ```sh
-cargo build --release --locked -p kinetic-cli --features cuda
+cargo build --release --locked -p swizzle-cli --features cuda
 ```
 
 ### Run, Chat, Serve, Benchmark

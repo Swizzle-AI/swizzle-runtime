@@ -36,18 +36,18 @@ jobs:
       - name: C example (gcc)
         if: runner.os == 'Linux'
         run: |
-          cargo build --release --locked -p kinetic-capi
-          gcc -std=c99 -Wall -Wextra -Werror -I crates/kinetic-capi/include \
-            crates/kinetic-capi/examples/chat.c -L target/release -lkinetic_capi -o chat
+          cargo build --release --locked -p swizzle-capi
+          gcc -std=c99 -Wall -Wextra -Werror -I crates/swizzle-capi/include \
+            crates/swizzle-capi/examples/chat.c -L target/release -lswizzle_capi -o chat
           LD_LIBRARY_PATH=target/release ./chat 2>&1 | grep -q usage
       - name: C example (cl)
         if: runner.os == 'Windows'
         shell: cmd
         run: |
-          cargo build --release --locked -p kinetic-capi || exit /b 1
+          cargo build --release --locked -p swizzle-capi || exit /b 1
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /W4 /WX /I crates\kinetic-capi\include crates\kinetic-capi\examples\chat.c target\release\kinetic_capi.dll.lib /Fe:chat.exe || exit /b 1
-          copy target\release\kinetic_capi.dll . || exit /b 1
+          cl /nologo /W4 /WX /I crates\swizzle-capi\include crates\swizzle-capi\examples\chat.c target\release\swizzle_capi.dll.lib /Fe:chat.exe || exit /b 1
+          copy target\release\swizzle_capi.dll . || exit /b 1
           chat.exe 2>&1 | findstr usage
 
   python:
@@ -71,5 +71,5 @@ jobs:
       - run: cargo clippy --release --locked --all-targets -- -D warnings
       - run: pip install "maturin>=1.5,<2"
       - run: maturin build --release --locked -o dist
-      - run: pip install --no-index --find-links dist kinetic-engine
+      - run: pip install --no-index --find-links dist swizzle-engine
       - run: python -m unittest discover -v -s tests

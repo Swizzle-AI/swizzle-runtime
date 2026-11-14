@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        A family is one file in `crates/kinetic-models/src/arch/`; see
+        A family is one file in `crates/swizzle-models/src/arch/`; see
         [Adding a model family](https://swizzle-ai.github.io/swizzle-runtime/adding-a-family.html)
         if you would like to add it yourself.
   - type: input
@@ -28,7 +28,7 @@ body:
     id: arch
     attributes:
       label: Architecture name
-      description: The `general.architecture` value, as `kinetic info <model>` or `python scripts/new_family.py <model> --dry-run` prints it.
+      description: The `general.architecture` value, as `swizzle-rt info <model>` or `python scripts/new_family.py <model> --dry-run` prints it.
       placeholder: phi3
     validations:
       required: true

@@ -399,103 +399,103 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
-name = "kinetic"
+name = "swizzle"
 version = "0.1.0"
 dependencies = [
- "kinetic-gguf",
- "kinetic-ktc",
- "kinetic-models",
- "kinetic-server",
- "kinetic-tokenizer",
+ "swizzle-gguf",
+ "swizzle-ktc",
+ "swizzle-models",
+ "swizzle-server",
+ "swizzle-tokenizer",
  "serde_json",
 ]
 
 [[package]]
-name = "kinetic-cpu"
+name = "swizzle-cpu"
 version = "0.1.0"
 dependencies = [
  "half",
- "kinetic-quant",
+ "swizzle-quant",
  "rayon",
 ]
 
 [[package]]
-name = "kinetic-cuda"
+name = "swizzle-cuda"
 version = "0.1.0"
 dependencies = [
  "half",
- "kinetic-quant",
+ "swizzle-quant",
  "libloading",
 ]
 
 [[package]]
-name = "kinetic-gguf"
+name = "swizzle-gguf"
 version = "0.1.0"
 dependencies = [
- "kinetic-quant",
+ "swizzle-quant",
  "memmap2",
  "windows-sys",
 ]
 
 [[package]]
-name = "kinetic-grammar"
+name = "swizzle-grammar"
 version = "0.1.0"
 dependencies = [
- "kinetic-tokenizer",
+ "swizzle-tokenizer",
  "serde_json",
 ]
 
 [[package]]
-name = "kinetic-ktc"
+name = "swizzle-ktc"
 version = "0.1.0"
 dependencies = [
  "blake3",
  "ed25519-dalek",
- "kinetic-gguf",
+ "swizzle-gguf",
  "memmap2",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "kinetic-models"
+name = "swizzle-models"
 version = "0.1.0"
 dependencies = [
  "half",
- "kinetic-cpu",
- "kinetic-cuda",
- "kinetic-gguf",
- "kinetic-quant",
+ "swizzle-cpu",
+ "swizzle-cuda",
+ "swizzle-gguf",
+ "swizzle-quant",
  "rayon",
 ]
 
 [[package]]
-name = "kinetic-python"
+name = "swizzle-python"
 version = "0.1.0"
 dependencies = [
- "kinetic",
+ "swizzle",
  "pyo3",
 ]
 
 [[package]]
-name = "kinetic-quant"
+name = "swizzle-quant"
 version = "0.1.0"
 dependencies = [
  "half",
 ]
 
 [[package]]
-name = "kinetic-server"
+name = "swizzle-server"
 version = "0.1.0"
 dependencies = [
  "blake3",
- "kinetic-cuda",
- "kinetic-gguf",
- "kinetic-grammar",
- "kinetic-ktc",
- "kinetic-models",
- "kinetic-tokenizer",
- "kinetic-vision",
+ "swizzle-cuda",
+ "swizzle-gguf",
+ "swizzle-grammar",
+ "swizzle-ktc",
+ "swizzle-models",
+ "swizzle-tokenizer",
+ "swizzle-vision",
  "minijinja",
  "minijinja-contrib",
  "serde",
@@ -503,24 +503,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "kinetic-tokenizer"
+name = "swizzle-tokenizer"
 version = "0.1.0"
 dependencies = [
- "kinetic-gguf",
+ "swizzle-gguf",
  "unicode-general-category",
  "unicode-normalization",
 ]
 
 [[package]]
-name = "kinetic-vision"
+name = "swizzle-vision"
 version = "0.1.0"
 dependencies = [
  "half",
  "image",
- "kinetic-cpu",
- "kinetic-cuda",
- "kinetic-gguf",
- "kinetic-quant",
+ "swizzle-cpu",
+ "swizzle-cuda",
+ "swizzle-gguf",
+ "swizzle-quant",
  "rayon",
 ]
 

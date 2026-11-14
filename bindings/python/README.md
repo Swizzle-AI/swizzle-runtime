@@ -2,16 +2,16 @@
 
 Swizzle Runtime: open engine for running AI locally. Runs your GGUF models today, and .ktc models verified and tuned for your hardware.
 
-Windows and Linux, x86-64. Everything runs on your computer. Swizzle Runtime never connects to the network, except when you run `kinetic pull`.
+Windows and Linux, x86-64. Everything runs on your computer. Swizzle Runtime never connects to the network, except when you run `swizzle-rt pull`.
 
 ```sh
-pip install kinetic-engine
+pip install swizzle-engine
 ```
 
 ```python
-import kinetic
+import swizzle
 
-model = kinetic.Model("SmolLM2-135M-Instruct-f16.gguf")
+model = swizzle.Model("SmolLM2-135M-Instruct-f16.gguf")
 
 # Chat through the model's own template.
 print(model.chat([{"role": "user", "content": "Name three rivers."}], max_tokens=64))
@@ -27,7 +27,7 @@ print(model.generate("The capital of France is", max_tokens=8, temperature=0))
 print(model.generate("Once upon a time", max_tokens=32, temperature=0.8, seed=42))
 
 # Embedding models turn texts into vectors.
-embedder = kinetic.Model("bge-small-en-v1.5-f16.gguf")
+embedder = swizzle.Model("bge-small-en-v1.5-f16.gguf")
 vectors = embedder.embed(["a cat", "a dog"])
 ```
 
@@ -38,7 +38,7 @@ vectors = embedder.embed(["a cat", "a dog"])
 ```sh
 pip install maturin
 maturin build --release
-pip install target/wheels/kinetic_engine-*.whl
+pip install target/wheels/swizzle_engine-*.whl
 ```
 
 Licensed under the Apache License 2.0. Copyright 2026 Swizzle AI.

@@ -4,10 +4,10 @@ Swizzle Runtime reads GGUF files as llama.cpp and the Hugging Face GGUF tools wr
 them, and its own `.ktc` files. It does not convert anything: you point it
 at a file on your disk.
 
-The quickest check for a file is `kinetic info`:
+The quickest check for a file is `swizzle-rt info`:
 
 ```sh
-kinetic info Qwen3.5-4B-MTP-Q4_K_M.gguf
+swizzle-rt info Qwen3.5-4B-MTP-Q4_K_M.gguf
 ```
 
 ```text
@@ -29,7 +29,7 @@ Qwen3.5-4B-MTP-Q4_K_M.gguf
 
 An architecture Swizzle Runtime does not know is marked `(not supported yet)`. A
 known architecture can still use a feature that is not supported yet, such
-as a kind of rotary scaling; `kinetic run` then names it when it loads the
+as a kind of rotary scaling; `swizzle-rt run` then names it when it loads the
 file.
 
 ## Architectures
@@ -63,7 +63,7 @@ Swizzle Runtime prints why. Through Vulkan (`--device vulkan`), `llama`, `qwen2`
 
 ### Embedding and ranking models
 
-`kinetic serve` answers `/v1/embeddings` for these and `/v1/rerank` for
+`swizzle-rt serve` answers `/v1/embeddings` for these and `/v1/rerank` for
 rerankers. They run on the CPU.
 
 | Architecture | Models |
@@ -79,7 +79,7 @@ sets a pooling type (`<arch>.pooling_type`).
 
 ### Vision
 
-With `kinetic serve <model> --mmproj <projector>`, chat requests may carry
+With `swizzle-rt serve <model> --mmproj <projector>`, chat requests may carry
 images. The projector file names its vision tower in `clip.projector_type`
 (or `clip.vision.projector_type` when it also holds an audio tower):
 
@@ -92,7 +92,7 @@ When the model runs on a CUDA GPU, images are encoded there too. A prompt with i
 on the GPU when every layer of the model is there, and on the CPU
 otherwise. More projectors are [coming](roadmap.md).
 
-Adding a projector type takes one file in `crates/kinetic-vision/src/`:
+Adding a projector type takes one file in `crates/swizzle-vision/src/`:
 
 1. A struct holding the weights, borrowed from the file through `Loader`.
 2. A `load` function that reads the hyperparameters and tensors and returns
@@ -107,7 +107,7 @@ Shared pieces live in `ops.rs` (linear, layer and RMS norms, GELU,
 bidirectional attention, patch gathering) and `preprocess.rs` (decoding,
 the aspect-keeping resize). Check a new type against llama.cpp's
 `llama-mtmd-debug --image rainbow -n <size>` with
-`cargo run --release -p kinetic-vision --example encode -- <mmproj> rainbow:<size>`:
+`cargo run --release -p swizzle-vision --example encode -- <mmproj> rainbow:<size>`:
 the first and last values and the sum of the final embeddings should match
 to a few digits. On the text side, an image's rows enter the prompt as
 `Input::Image`; models with (time, row, column) rotary positions place them
@@ -120,7 +120,7 @@ The tokenizer is read from the file. Swizzle Runtime has byte-level BPE
 (`bert`). BPE models also name a pre-tokenizer (`tokenizer.ggml.pre`); these
 are supported: `qwen35`, `qwen2`, `llama3`, `llama-v3`, `llama-bpe`, `lfm2`,
 `falcon-h1`, `dbrx`, `smollm`, `refact`, `gpt-2`, `exaone4` and
-`hunyuan-dense`. `kinetic info` names a missing one on its tokenizer line.
+`hunyuan-dense`. `swizzle-rt info` names a missing one on its tokenizer line.
 
 ### Chat templates and tool calls
 
@@ -130,7 +130,7 @@ read in the formats of Qwen3.5, Qwen3, LFM3, LFM2, Llama 3 and Mistral.
 
 ## Weight formats
 
-These are the GGUF tensor types, by the names `kinetic info` prints. A file
+These are the GGUF tensor types, by the names `swizzle-rt info` prints. A file
 mixes several (Q4_K_M, for one, is mostly Q4_K with some Q6_K).
 
 | Type | Bits per weight | CPU | CUDA |
@@ -183,7 +183,7 @@ with llama.cpp's `llama-gguf-split --merge`.
 
 If a model you need is missing, open a
 ["model not supported" issue](https://github.com/Swizzle-AI/swizzle-runtime/issues/new?template=model-not-supported.yml)
-with the output of `kinetic info`, or add it: see
+with the output of `swizzle-rt info`, or add it: see
 [Adding an architecture](contributing.md#adding-an-architecture).
 
 ## .ktc files
@@ -196,11 +196,11 @@ header, the manifest, zero padding or a hashed section, so nothing can hide
 in it.
 
 ```sh
-kinetic verify model.ktc
+swizzle-rt verify model.ktc
 ```
 
 recomputes every hash and reports whether the file is signed; it exits with 1
 when anything does not match. Every command that takes a `.gguf` file takes
 a `.ktc` file too. The format is specified in
-[FORMAT.md](https://github.com/Swizzle-AI/swizzle-runtime/blob/main/crates/kinetic-ktc/FORMAT.md)
+[FORMAT.md](https://github.com/Swizzle-AI/swizzle-runtime/blob/main/crates/swizzle-ktc/FORMAT.md)
 and versioned on its own; see [Versioning](versioning.md).

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Throws bad input and misbehaving clients at `kinetic serve`.
+"""Throws bad input and misbehaving clients at `swizzle-rt serve`.
 
 Every case must end in the expected status (bad input gets a 4xx with a
 message, never a crash or a hang) and the server must still answer a real
 chat request at the end.
 
-    python scripts/server_abuse.py -- kinetic serve model.gguf -c 512 --port 8091
+    python scripts/server_abuse.py -- swizzle-rt serve model.gguf -c 512 --port 8091
     python scripts/server_abuse.py --port 8091          # a server already running
 
 Run the server with a small context (-c 512) so the long-prompt case is

@@ -19,7 +19,7 @@ body:
   - type: textarea
     id: info
     attributes:
-      label: Output of `kinetic info <model>`
+      label: Output of `swizzle-rt info <model>`
       render: text
     validations:
       required: true
@@ -30,8 +30,8 @@ body:
       description: The command you ran and everything Swizzle Runtime printed.
       render: shell
       placeholder: |
-        kinetic run model.gguf "Hello"
-        kinetic: architecture phi3 is not supported yet
+        swizzle-rt run model.gguf "Hello"
+        swizzle: architecture phi3 is not supported yet
     validations:
       required: true
   - type: textarea

@@ -1,20 +1,20 @@
-"""kinetic.llama_cpp against llama-cpp-python's response shapes.
+"""swizzle.llama_cpp against llama-cpp-python's response shapes.
 
-KINETIC_TEST_GGUF=SmolLM2-135M-Instruct-f16.gguf KINETIC_TEST_EMBED_GGUF=bge-small-en-v1.5-f16.gguf
+SWIZZLE_TEST_GGUF=SmolLM2-135M-Instruct-f16.gguf SWIZZLE_TEST_EMBED_GGUF=bge-small-en-v1.5-f16.gguf
 python -m unittest discover -s tests
 """
 
 import os
 import unittest
 
-from kinetic.llama_cpp import Llama
+from swizzle.llama_cpp import Llama
 
-TEXT = os.environ.get("KINETIC_TEST_GGUF")
-EMBED = os.environ.get("KINETIC_TEST_EMBED_GGUF")
+TEXT = os.environ.get("SWIZZLE_TEST_GGUF")
+EMBED = os.environ.get("SWIZZLE_TEST_EMBED_GGUF")
 QUESTION = [{"role": "user", "content": "What is the capital of France?"}]
 
 
-@unittest.skipUnless(TEXT, "set KINETIC_TEST_GGUF")
+@unittest.skipUnless(TEXT, "set SWIZZLE_TEST_GGUF")
 class Completion(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -75,7 +75,7 @@ class Completion(unittest.TestCase):
             self.llm.create_chat_completion(messages=QUESTION, tools=[{"type": "function"}])
 
 
-@unittest.skipUnless(EMBED, "set KINETIC_TEST_EMBED_GGUF")
+@unittest.skipUnless(EMBED, "set SWIZZLE_TEST_EMBED_GGUF")
 class Embedding(unittest.TestCase):
     def test_embed_shapes(self):
         llm = Llama(model_path=EMBED, embedding=True, verbose=False)

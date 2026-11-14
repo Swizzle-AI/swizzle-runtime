@@ -12,14 +12,14 @@ and a weight format.
 A family is one file and one line. With the GGUF file of the model:
 
 1. `python scripts/new_family.py model.gguf` prints the file's layout and
-   writes a starter `crates/kinetic-models/src/arch/<name>.rs` that builds,
+   writes a starter `crates/swizzle-models/src/arch/<name>.rs` that builds,
    already in the family list.
 2. Map the tensors of one layer onto the shared blocks in that file;
    [Adding a model family](docs/src/adding-a-family.md) lists the blocks and
    shows LFM2 end to end.
-3. `python scripts/conformance.py model.gguf --kinetic target/release/kinetic --llama <llama.cpp bin>`
+3. `python scripts/conformance.py model.gguf --swizzle target/release/swizzle --llama <llama.cpp bin>`
    compares greedy tokens with llama.cpp.
-4. Run the identity gates (`KINETIC_TEST_GGUF=model.gguf cargo test --release -p kinetic-models --test architectures -- --ignored`),
+4. Run the identity gates (`SWIZZLE_TEST_GGUF=model.gguf cargo test --release -p swizzle-models --test architectures -- --ignored`),
    add a row to `docs/src/models.md` and open the pull request with the
    conformance output.
 
@@ -38,8 +38,8 @@ No time to write it? Open a "Support a new model family" issue.
 You need Rust 1.91 or newer, on Windows or Linux (x86-64).
 
 ```sh
-cargo build --release -p kinetic-cli
-target/release/kinetic info model.gguf
+cargo build --release -p swizzle-cli
+target/release/swizzle-rt info model.gguf
 ```
 
 The `cuda` feature is on by default. Its kernels need the CUDA toolkit
@@ -48,7 +48,7 @@ builds and reports at runtime that the kernels are missing. For a CPU-only
 build:
 
 ```sh
-cargo build --release -p kinetic-cli --no-default-features
+cargo build --release -p swizzle-cli --no-default-features
 ```
 
 The Python bindings live outside the workspace and build with
@@ -68,7 +68,7 @@ Tests that need a real model are ignored by default. Point them at a file and
 include them:
 
 ```sh
-KINETIC_TEST_GGUF=SmolLM2-135M-Instruct-f16.gguf cargo test --release -p kinetic-server -- --include-ignored
+SWIZZLE_TEST_GGUF=SmolLM2-135M-Instruct-f16.gguf cargo test --release -p swizzle-server -- --include-ignored
 ```
 
 ## What we look for
@@ -82,7 +82,7 @@ KINETIC_TEST_GGUF=SmolLM2-135M-Instruct-f16.gguf cargo test --release -p kinetic
   public items, comments only where the reason is not obvious. `unsafe` only
   at FFI, SIMD and kernel boundaries, each block with a `// SAFETY:` comment.
 - **No network.** Swizzle Runtime never connects to the network, except when you
-  run `kinetic pull`. Nothing else may open a connection.
+  run `swizzle-rt pull`. Nothing else may open a connection.
 - **Own code.** No code copied from other inference engines. Format tables
   and grids are data; note their source in [NOTICE](NOTICE).
 - **Dependencies** under MIT, Apache-2.0, BSD, ISC, Zlib, Unicode or CC0

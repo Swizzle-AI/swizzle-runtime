@@ -9,13 +9,13 @@ otherwise on the CPU, as `--device auto` does.
 ## Python
 
 ```sh
-pip install kinetic-engine
+pip install swizzle-engine
 ```
 
 ```python
-import kinetic
+import swizzle
 
-model = kinetic.Model("SmolLM2-135M-Instruct-f16.gguf")
+model = swizzle.Model("SmolLM2-135M-Instruct-f16.gguf")
 
 # Chat through the model's own template.
 print(model.chat([{"role": "user", "content": "Name three rivers."}], max_tokens=64))
@@ -31,18 +31,18 @@ print(model.generate("The capital of France is", max_tokens=8, temperature=0))
 print(model.generate("Once upon a time", max_tokens=32, temperature=0.8, seed=42))
 
 # Embedding models turn texts into vectors.
-embedder = kinetic.Model("bge-small-en-v1.5-f16.gguf")
+embedder = swizzle.Model("bge-small-en-v1.5-f16.gguf")
 vectors = embedder.embed(["a cat", "a dog"])
 ```
 
 | | |
 |---|---|
-| `kinetic.Model(path)` | loads a model; raises `RuntimeError` when the file cannot be loaded |
+| `swizzle.Model(path)` | loads a model; raises `RuntimeError` when the file cannot be loaded |
 | `model.name` | the file name without its extension |
 | `model.chat(messages, max_tokens=None, temperature=None, seed=None, stream=False)` | answers a list of `{"role": ..., "content": ...}` dicts; returns the text, or an iterator of pieces with `stream=True` |
 | `model.generate(prompt, max_tokens=None, temperature=None, seed=None, stream=False)` | continues `prompt` exactly as written, without the chat template |
 | `model.embed(texts)` | one vector (a list of floats) per text, from an embedding model |
-| `kinetic.__version__` | the version, such as `"0.1.0"` |
+| `swizzle.__version__` | the version, such as `"0.1.0"` |
 
 Without `max_tokens` an answer runs until it ends or fills the context.
 Calls release the GIL, so other Python threads keep running while the model
@@ -51,18 +51,18 @@ stream stops its generation.
 
 The published wheels run on the CPU. For the GPU, build the package from
 source with the CUDA toolkit installed (see
-[Building from source](building.md#the-libraries)), or run `kinetic serve` and
+[Building from source](building.md#the-libraries)), or run `swizzle-rt serve` and
 use the `openai` package against it, which also gives you tools, JSON
 output and images.
 
-`kinetic.llama_cpp` offers the commonly used part of `llama-cpp-python`'s
-`Llama` class. `pip install llama-cpp-kinetic` makes `import llama_cpp` load
+`swizzle.llama_cpp` offers the commonly used part of `llama-cpp-python`'s
+`Llama` class. `pip install llama-cpp-swizzle` makes `import llama_cpp` load
 it, so code written for llama-cpp-python runs unchanged; an installed
 llama-cpp-python is shadowed, not touched, and comes back when you uninstall
-`llama-cpp-kinetic`. Or change one import:
+`llama-cpp-swizzle`. Or change one import:
 
 ```python
-from kinetic.llama_cpp import Llama   # was: from llama_cpp import Llama
+from swizzle.llama_cpp import Llama   # was: from llama_cpp import Llama
 
 llm = Llama(model_path="model.gguf", n_ctx=4096, n_gpu_layers=-1, seed=42)
 out = llm("Q: Name the planets. A:", max_tokens=64, stop=["Q:"])
@@ -79,18 +79,18 @@ model fits. Grammars, tools, `response_format` and logprobs raise
 
 ## C
 
-The release archives carry `include/kinetic.h` and the library:
-`lib/kinetic_capi.dll` with its import library `kinetic_capi.dll.lib` on
-Windows, `lib/libkinetic_capi.so` on Linux. To build it yourself:
-`cargo build --release -p kinetic-capi`.
+The release archives carry `include/swizzle.h` and the library:
+`lib/swizzle_capi.dll` with its import library `swizzle_capi.dll.lib` on
+Windows, `lib/libswizzle_capi.so` on Linux. To build it yourself:
+`cargo build --release -p swizzle-capi`.
 
-This program, [`examples/chat.c`](https://github.com/Swizzle-AI/swizzle-runtime/blob/main/crates/kinetic-capi/examples/chat.c),
+This program, [`examples/chat.c`](https://github.com/Swizzle-AI/swizzle-runtime/blob/main/crates/swizzle-capi/examples/chat.c),
 asks one question and streams the answer:
 
 ```c
 #include <stdio.h>
 
-#include "kinetic.h"
+#include "swizzle.h"
 
 static bool print_text(const char *text, size_t len, void *user_data) {
     (void)user_data;
@@ -104,27 +104,27 @@ int main(int argc, char **argv) {
         fprintf(stderr, "usage: %s MODEL PROMPT\n", argv[0]);
         return 2;
     }
-    kinetic_model *model = kinetic_model_load(argv[1]);
+    swizzle_model *model = swizzle_model_load(argv[1]);
     if (!model) {
-        fprintf(stderr, "kinetic: %s\n", kinetic_last_error());
+        fprintf(stderr, "swizzle: %s\n", swizzle_last_error());
         return 1;
     }
-    kinetic_session *session = kinetic_session_new(model, NULL);
+    swizzle_session *session = swizzle_session_new(model, NULL);
     if (!session) {
-        fprintf(stderr, "kinetic: %s\n", kinetic_last_error());
-        kinetic_model_free(model);
+        fprintf(stderr, "swizzle: %s\n", swizzle_last_error());
+        swizzle_model_free(model);
         return 1;
     }
-    kinetic_params params = kinetic_params_default();
+    swizzle_params params = swizzle_params_default();
     params.max_tokens = 128;
-    int64_t tokens = kinetic_session_generate(session, argv[2], &params, print_text, NULL);
+    int64_t tokens = swizzle_session_generate(session, argv[2], &params, print_text, NULL);
     if (tokens < 0) {
-        fprintf(stderr, "kinetic: %s\n", kinetic_last_error());
+        fprintf(stderr, "swizzle: %s\n", swizzle_last_error());
     } else {
-        fprintf(stderr, "\n[%lld tokens, kinetic %s]\n", (long long)tokens, kinetic_version());
+        fprintf(stderr, "\n[%lld tokens, swizzle %s]\n", (long long)tokens, swizzle_version());
     }
-    kinetic_session_free(session);
-    kinetic_model_free(model);
+    swizzle_session_free(session);
+    swizzle_model_free(model);
     return tokens < 0;
 }
 ```
@@ -133,29 +133,29 @@ Build and run it:
 
 ```sh
 # Linux
-gcc -std=c99 -I include examples/chat.c -L lib -lkinetic_capi -o chat
+gcc -std=c99 -I include examples/chat.c -L lib -lswizzle_capi -o chat
 LD_LIBRARY_PATH=lib ./chat model.gguf "Name three rivers."
 ```
 
 ```bat
 :: Windows, in a Visual Studio developer prompt
-cl /I include examples\chat.c lib\kinetic_capi.dll.lib
-copy lib\kinetic_capi.dll .
+cl /I include examples\chat.c lib\swizzle_capi.dll.lib
+copy lib\swizzle_capi.dll .
 chat.exe model.gguf "Name three rivers."
 ```
 
-The API in brief; [`kinetic.h`](https://github.com/Swizzle-AI/swizzle-runtime/blob/main/crates/kinetic-capi/include/kinetic.h)
+The API in brief; [`swizzle.h`](https://github.com/Swizzle-AI/swizzle-runtime/blob/main/crates/swizzle-capi/include/swizzle.h)
 documents every function:
 
 | Function | Does |
 |---|---|
-| `kinetic_model_load(path)` | loads a model; `NULL` on failure |
-| `kinetic_session_new(model, system)` | starts a conversation with an optional system prompt |
-| `kinetic_session_generate(session, message, params, on_text, user_data)` | adds a user message, streams the answer to `on_text` (return `false` to stop) and adds it to the conversation; returns the number of tokens, or -1 |
-| `kinetic_params_default()` | no token limit, the model's temperature, no seed |
-| `kinetic_embedding_size(model)`, `kinetic_embed(model, text, out)` | vectors from an embedding model |
-| `kinetic_last_error()` | why the last failing call on this thread failed |
-| `kinetic_session_free`, `kinetic_model_free` | free them; a model is freed once its sessions are |
+| `swizzle_model_load(path)` | loads a model; `NULL` on failure |
+| `swizzle_session_new(model, system)` | starts a conversation with an optional system prompt |
+| `swizzle_session_generate(session, message, params, on_text, user_data)` | adds a user message, streams the answer to `on_text` (return `false` to stop) and adds it to the conversation; returns the number of tokens, or -1 |
+| `swizzle_params_default()` | no token limit, the model's temperature, no seed |
+| `swizzle_embedding_size(model)`, `swizzle_embed(model, text, out)` | vectors from an embedding model |
+| `swizzle_last_error()` | why the last failing call on this thread failed |
+| `swizzle_session_free`, `swizzle_model_free` | free them; a model is freed once its sessions are |
 
 Strings are UTF-8. A model may be shared between threads, whose requests
 take turns on it; a session belongs to one thread at a time. Each turn of a
@@ -163,19 +163,19 @@ session reuses the work of the previous ones.
 
 ## Rust
 
-Add the [`kinetic`](https://github.com/Swizzle-AI/swizzle-runtime/tree/main/crates/kinetic)
+Add the [`swizzle`](https://github.com/Swizzle-AI/swizzle-runtime/tree/main/crates/swizzle)
 crate from the repository:
 
 ```toml
 [dependencies]
-kinetic = { git = "https://github.com/Swizzle-AI/swizzle-runtime" }
+swizzle = { git = "https://github.com/Swizzle-AI/swizzle-runtime" }
 ```
 
 ```rust
-fn main() -> Result<(), kinetic::Error> {
-    let model = kinetic::Model::open("model.gguf")?;
+fn main() -> Result<(), swizzle::Error> {
+    let model = swizzle::Model::open("model.gguf")?;
     let request = model.request();
-    let messages = [kinetic::Message::new("user", "Name three rivers.")];
+    let messages = [swizzle::Message::new("user", "Name three rivers.")];
     let answer = model.chat(&messages, &request, &mut |text| {
         print!("{text}");
         true
@@ -191,6 +191,6 @@ fields before passing it. `generate` continues a raw prompt and `embed`
 returns vectors from an embedding model. The `cuda` feature is on by
 default; `default-features = false` builds a CPU-only library.
 
-The crates below `kinetic` (`kinetic-models`, `kinetic-server` and the
+The crates below `swizzle` (`swizzle-models`, `swizzle-server` and the
 others) are the engine itself. Their APIs are public so that the tools in
 this repository can use them, but they change between releases.

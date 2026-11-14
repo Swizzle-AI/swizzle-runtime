@@ -3,10 +3,10 @@
 
 Two comparisons, printed as one markdown table:
 
-- plain: `kinetic bench` against `llama-bench`, prompt 512 and generate 128
+- plain: `swizzle-rt bench` against `llama-bench`, prompt 512 and generate 128
   tokens with no drafting, best of the repetitions on both sides;
 - edit: one greedy chat request that rewrites a piece of code, served by
-  `kinetic serve` and by `llama-server` with its speculative decoding on
+  `swizzle-rt serve` and by `llama-server` with its speculative decoding on
   (`--spec-type`, n-gram drafts by default), measured once, the same way on
   the client: generated tokens over the time from first to last token.
 
@@ -83,8 +83,8 @@ def cpu_only_env():
     return env
 
 
-def plain(args, kinetic, llama_bench):
-    k = run_json([kinetic, "bench", args.model, "--device", "cpu", "-r", str(args.repetitions), "-t", str(args.threads), "--json"])
+def plain(args, swizzle, llama_bench):
+    k = run_json([swizzle, "bench", args.model, "--device", "cpu", "-r", str(args.repetitions), "-t", str(args.threads), "--json"])
     llama_cmd = [
         llama_bench, "-m", args.model, "-p", str(PROMPT), "-n", str(GENERATE),
         "-r", str(args.repetitions), "-t", str(args.threads), "-ngl", "0", "-fa", "on", "-o", "json",
@@ -166,9 +166,9 @@ def serve_and_measure(cmd, port, env, max_tokens):
             proc.kill()
 
 
-def edit(args, kinetic, llama_server):
+def edit(args, swizzle, llama_server):
     k_rate, k_text = serve_and_measure(
-        [kinetic, "serve", args.model, "--device", "cpu", "--port", str(args.port), "-t", str(args.threads),
+        [swizzle, "serve", args.model, "--device", "cpu", "--port", str(args.port), "-t", str(args.threads),
          "-c", "8192"],
         args.port, None, args.max_tokens,
     )
@@ -187,7 +187,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("model", help="the .gguf file both engines run")
     p.add_argument("--llama-dir", required=True, help="folder with llama-bench and llama-server")
-    p.add_argument("--kinetic", help="the kinetic binary [default: kinetic on PATH]")
+    p.add_argument("--swizzle", help="the swizzle binary [default: swizzle on PATH]")
     p.add_argument("-t", "--threads", type=int, default=max(1, (os.cpu_count() or 2) // 2),
                    help="CPU threads for both [default: half the logical CPUs]")
     p.add_argument("-r", "--repetitions", type=int, default=3)
@@ -198,16 +198,16 @@ def main():
     p.add_argument("--skip-edit", action="store_true", help="only the plain llama-bench tests")
     args = p.parse_args()
 
-    kinetic = args.kinetic or tool(None, "kinetic")
-    version = subprocess.run([kinetic, "--version"], capture_output=True, text=True).stdout.strip()
-    rates, bench_cmd = plain(args, kinetic, tool(args.llama_dir, "llama-bench"))
+    swizzle = args.swizzle or tool(None, "swizzle")
+    version = subprocess.run([swizzle, "--version"], capture_output=True, text=True).stdout.strip()
+    rates, bench_cmd = plain(args, swizzle, tool(args.llama_dir, "llama-bench"))
     rows = [
         (f"prompt {PROMPT}, tok/s", *rates["prompt"]),
         (f"generate {GENERATE}, tok/s", *rates["generate"]),
     ]
     notes = [f"llama.cpp plain: `{bench_cmd}`"]
     if not args.skip_edit:
-        (k, l), same, server_cmd = edit(args, kinetic, tool(args.llama_dir, "llama-server"))
+        (k, l), same, server_cmd = edit(args, swizzle, tool(args.llama_dir, "llama-server"))
         rows.append(("edit, speculative, tok/s", k, l))
         notes.append(f"llama.cpp edit: `{server_cmd}`")
         notes.append(f"edit answers identical: {'yes' if same else 'no'}")

@@ -21,18 +21,18 @@ are a good place to start.
 
 | Crate | Holds |
 |---|---|
-| `kinetic-gguf` | the GGUF reader: header, metadata, memory-mapped tensors |
-| `kinetic-quant` | `TensorType` and the scalar reference dequantization of every format: the definition the fast kernels are tested against |
-| `kinetic-cpu` | AVX2 kernels: matrix-vector products per format, norms, rotary embeddings, the thread pool |
-| `kinetic-models` | the shared blocks (`blocks/`), the architectures built from them (`arch/`), the CUDA executor (`cuda/`), speculative decoding (`speculative/`), Warm Start (`warm/`), Shortlist (`head/`) |
-| `kinetic-cuda` | the CUDA driver API, the kernels (`cuda/*.cuh`) and their launchers |
-| `kinetic-tokenizer` | BPE, SentencePiece and WordPiece tokenizers read from GGUF metadata |
-| `kinetic-grammar` | GBNF and JSON Schema to a token mask |
-| `kinetic-vision` | image encoders (`mmproj` files) |
-| `kinetic-ktc` | the `.ktc` format: reader, writer, verification |
-| `kinetic-server` | the engine (chat template, sampling, tool calls) and the HTTP server |
-| `kinetic-cli` | the `kinetic` command |
-| `kinetic`, `kinetic-capi` | the Rust and C libraries; `bindings/python` builds on `kinetic` |
+| `swizzle-gguf` | the GGUF reader: header, metadata, memory-mapped tensors |
+| `swizzle-quant` | `TensorType` and the scalar reference dequantization of every format: the definition the fast kernels are tested against |
+| `swizzle-cpu` | AVX2 kernels: matrix-vector products per format, norms, rotary embeddings, the thread pool |
+| `swizzle-models` | the shared blocks (`blocks/`), the architectures built from them (`arch/`), the CUDA executor (`cuda/`), speculative decoding (`speculative/`), Warm Start (`warm/`), Shortlist (`head/`) |
+| `swizzle-cuda` | the CUDA driver API, the kernels (`cuda/*.cuh`) and their launchers |
+| `swizzle-tokenizer` | BPE, SentencePiece and WordPiece tokenizers read from GGUF metadata |
+| `swizzle-grammar` | GBNF and JSON Schema to a token mask |
+| `swizzle-vision` | image encoders (`mmproj` files) |
+| `swizzle-ktc` | the `.ktc` format: reader, writer, verification |
+| `swizzle-server` | the engine (chat template, sampling, tool calls) and the HTTP server |
+| `swizzle-cli` | the `swizzle` command |
+| `swizzle`, `swizzle-capi` | the Rust and C libraries; `bindings/python` builds on `swizzle` |
 
 ## What every change must keep
 
@@ -46,7 +46,7 @@ are a good place to start.
   expected; tables and grids of a format are data, and their source goes
   into `NOTICE`.
 - **No network.** Swizzle Runtime never connects to the network, except when you
-  run `kinetic pull`. Nothing else may open a connection.
+  run `swizzle-rt pull`. Nothing else may open a connection.
 - **Small files with one job**, doc comments on public items, comments only
   where the reason is not obvious, `unsafe` only at FFI, SIMD and kernel
   boundaries with a `// SAFETY:` comment.
@@ -72,18 +72,18 @@ descriptor, the conformance check against llama.cpp and the identity gates.
 Every format is defined once, by its reference dequantization, and every
 fast kernel is tested against that definition.
 
-1. **The type.** `crates/kinetic-quant/src/types.rs`: the GGUF type id,
+1. **The type.** `crates/swizzle-quant/src/types.rs`: the GGUF type id,
    elements and bytes per block, and the name.
-2. **The definition.** A block decoder in `crates/kinetic-quant/src/dequant/`,
+2. **The definition.** A block decoder in `crates/swizzle-quant/src/dequant/`,
    wired into `dequantize`. Straightforward scalar code; this is what "correct"
    means for the format. Lookup grids go in `grids/` with their source noted
    in `NOTICE`.
 3. **The CPU kernel.** A dot product against 8-bit activations in
-   `crates/kinetic-cpu/src/kdot/`, with an AVX2 version where it pays.
+   `crates/swizzle-cpu/src/kdot/`, with an AVX2 version where it pays.
    `kdot/tests.rs` compares every kernel with the reference on random
    blocks. Until a kernel exists, `matvec` falls back to dequantizing rows,
    so a new format works on the CPU from step 2 on.
-4. **The CUDA kernel.** A GEMV in `crates/kinetic-cuda/cuda/`, its entry in
+4. **The CUDA kernel.** A GEMV in `crates/swizzle-cuda/cuda/`, its entry in
    `WEIGHT_TYPES` (`src/gemv.rs`) and its field layout (`src/layout.rs`),
    tested in `tests/gemv_quants.rs` against the reference and an f64 dot
    product, alone and batched. Expert kernels for mixture-of-experts models

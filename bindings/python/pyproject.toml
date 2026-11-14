@@ -3,7 +3,7 @@ requires = ["maturin>=1.5,<2"]
 build-backend = "maturin"
 
 [project]
-name = "kinetic-engine"
+name = "swizzle-engine"
 description = "Open engine for running AI locally"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -24,5 +24,5 @@ Homepage = "https://github.com/Swizzle-AI"
 Source = "https://github.com/Swizzle-AI/swizzle-runtime"
 
 [tool.maturin]
-module-name = "kinetic._kinetic"
+module-name = "swizzle._swizzle"
 python-source = "python"

@@ -1,0 +1,16 @@
+[package]
+name = "swizzle-grammar"
+description = "Grammar-constrained generation: GBNF, JSON Schema and fast token masks"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+swizzle-tokenizer = { path = "../swizzle-tokenizer" }
+# Object properties keep the order the schema lists them in.
+serde_json = { version = "1.0.149", features = ["preserve_order"] }
+
+[dev-dependencies]
+swizzle-gguf = { path = "../swizzle-gguf" }
+swizzle-models = { path = "../swizzle-models" }

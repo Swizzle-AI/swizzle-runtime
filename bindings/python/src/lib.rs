@@ -1,4 +1,4 @@
-//! The `kinetic._kinetic` extension module; `kinetic` re-exports it.
+//! The `swizzle._swizzle` extension module; `swizzle` re-exports it.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -10,9 +10,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
 
 /// A local model loaded from a .gguf or .ktc file.
-#[pyclass(frozen, module = "kinetic")]
+#[pyclass(frozen, module = "swizzle")]
 struct Model {
-    inner: Arc<kinetic::Model>,
+    inner: Arc<swizzle::Model>,
 }
 
 /// What a generation thread sends.
@@ -29,7 +29,7 @@ struct Summary {
 }
 
 impl Summary {
-    fn new(c: &kinetic::Completion) -> Self {
+    fn new(c: &swizzle::Completion) -> Self {
         Summary {
             finish: c.finish.as_str(),
             prompt_tokens: c.prompt_tokens,
@@ -49,7 +49,7 @@ impl Summary {
 
 /// Pieces of text as the model writes them. Dropping the stream stops the
 /// generation.
-#[pyclass(module = "kinetic")]
+#[pyclass(module = "swizzle")]
 struct TextStream {
     events: Receiver<Result<Event, String>>,
     /// Yields dicts, ending with one that says how the generation ended,
@@ -70,15 +70,15 @@ struct Settings {
     stop: Vec<String>,
 }
 
-fn runtime_error(e: kinetic::Error) -> PyErr {
+fn runtime_error(e: swizzle::Error) -> PyErr {
     PyRuntimeError::new_err(e.to_string())
 }
 
-fn messages(messages: Vec<HashMap<String, String>>) -> PyResult<Vec<kinetic::Message>> {
+fn messages(messages: Vec<HashMap<String, String>>) -> PyResult<Vec<swizzle::Message>> {
     messages
         .into_iter()
         .map(|mut m| match (m.remove("role"), m.remove("content")) {
-            (Some(role), Some(content)) => Ok(kinetic::Message { role, content }),
+            (Some(role), Some(content)) => Ok(swizzle::Message { role, content }),
             _ => Err(PyValueError::new_err(
                 "every message needs a role and a content",
             )),
@@ -94,9 +94,9 @@ impl Model {
     #[new]
     #[pyo3(signature = (path, context=None, gpu=true))]
     fn new(py: Python<'_>, path: PathBuf, context: Option<usize>, gpu: bool) -> PyResult<Self> {
-        let options = kinetic::Options { context, gpu };
+        let options = swizzle::Options { context, gpu };
         let model = py
-            .allow_threads(|| kinetic::Model::open_with(path, &options))
+            .allow_threads(|| swizzle::Model::open_with(path, &options))
             .map_err(runtime_error)?;
         Ok(Model {
             inner: Arc::new(model),
@@ -243,17 +243,17 @@ impl Model {
     }
 
     fn __repr__(&self) -> String {
-        format!("kinetic.Model({:?})", self.inner.name())
+        format!("swizzle.Model({:?})", self.inner.name())
     }
 }
 
 enum Job {
     Generate(String),
-    Chat(Vec<kinetic::Message>),
+    Chat(Vec<swizzle::Message>),
 }
 
 impl Model {
-    fn request(&self, s: &Settings) -> kinetic::Request {
+    fn request(&self, s: &Settings) -> swizzle::Request {
         let mut request = self.inner.request();
         request.max_tokens = s.max_tokens.filter(|&n| n > 0);
         let sampling = &mut request.sampling;
@@ -329,10 +329,10 @@ impl TextStream {
     }
 }
 
-/// Kinetic: open engine for running AI locally.
+/// Swizzle: open engine for running AI locally.
 #[pymodule]
-#[pyo3(name = "_kinetic")]
-fn kinetic_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
+#[pyo3(name = "_swizzle")]
+fn swizzle_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_class::<Model>()?;
     m.add_class::<TextStream>()?;

@@ -1,0 +1,15 @@
+[package]
+name = "swizzle-cuda"
+description = "CUDA backend: driver bindings loaded at runtime and decode kernels"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+half.workspace = true
+swizzle-quant = { path = "../swizzle-quant" }
+libloading = "0.8.9"
+
+[dev-dependencies]
+swizzle-gguf = { path = "../swizzle-gguf" }

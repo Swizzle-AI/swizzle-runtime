@@ -6,7 +6,7 @@ Installs Swizzle Runtime for the current user on Windows.
 Downloads a Swizzle Runtime release from GitHub (the full build, which runs on
 NVIDIA GPUs through CUDA, on AMD and Intel GPUs through Vulkan and on the
 CPU; -Cpu takes the smaller CPU-only build), checks it against the release's
-SHA256SUMS, unpacks it into %LOCALAPPDATA%\Programs\kinetic and puts that
+SHA256SUMS, unpacks it into %LOCALAPPDATA%\Programs\swizzle and puts that
 folder on the user's PATH. Needs no administrator rights.
 
 .EXAMPLE
@@ -25,24 +25,24 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $repo = 'Swizzle-AI/swizzle-runtime'
-$dir = Join-Path $env:LOCALAPPDATA 'Programs\kinetic'
+$dir = Join-Path $env:LOCALAPPDATA 'Programs\swizzle'
 
 if (-not [Environment]::Is64BitOperatingSystem) {
     throw 'Swizzle Runtime needs 64-bit Windows.'
 }
 
 if (-not $Version) {
-    $latest = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers @{ 'User-Agent' = 'kinetic-install' }
+    $latest = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers @{ 'User-Agent' = 'swizzle-install' }
     $Version = $latest.tag_name
 }
 $Version = $Version.TrimStart('v')
 
 # the cuda archive is the full build: CUDA, Vulkan and the CPU in one binary
 $variant = if ($Cpu) { 'cpu' } else { 'cuda' }
-$name = "kinetic-$Version-windows-x86_64-$variant"
+$name = "swizzle-$Version-windows-x86_64-$variant"
 $base = "https://github.com/$repo/releases/download/v$Version"
 
-$tmp = Join-Path ([IO.Path]::GetTempPath()) "kinetic-install-$PID"
+$tmp = Join-Path ([IO.Path]::GetTempPath()) "swizzle-install-$PID"
 New-Item -ItemType Directory -Force $tmp | Out-Null
 try {
     Write-Host "Downloading Swizzle Runtime $Version ($variant build)"
@@ -68,8 +68,8 @@ $entries = @($path -split ';' | Where-Object { $_ })
 if ($entries -notcontains $dir) {
     [Environment]::SetEnvironmentVariable('Path', (($entries + $dir) -join ';'), 'User')
     $env:Path = "$env:Path;$dir"
-    Write-Host "Added $dir to your PATH; new terminals will find kinetic."
+    Write-Host "Added $dir to your PATH; new terminals will find swizzle."
 }
 
-& (Join-Path $dir 'kinetic.exe') --version
-Write-Host "Installed in $dir. Try: kinetic doctor"
+& (Join-Path $dir 'swizzle.exe') --version
+Write-Host "Installed in $dir. Try: swizzle doctor"

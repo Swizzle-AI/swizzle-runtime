@@ -1,6 +1,6 @@
 """Smoke tests for the installed wheel.
 
-KINETIC_TEST_GGUF=SmolLM2-135M-Instruct-f16.gguf KINETIC_TEST_EMBED_GGUF=bge-small-en-v1.5-f16.gguf
+SWIZZLE_TEST_GGUF=SmolLM2-135M-Instruct-f16.gguf SWIZZLE_TEST_EMBED_GGUF=bge-small-en-v1.5-f16.gguf
 python -m unittest discover -s tests
 """
 
@@ -8,27 +8,27 @@ import os
 import threading
 import unittest
 
-import kinetic
+import swizzle
 
-TEXT = os.environ.get("KINETIC_TEST_GGUF")
-EMBED = os.environ.get("KINETIC_TEST_EMBED_GGUF")
+TEXT = os.environ.get("SWIZZLE_TEST_GGUF")
+EMBED = os.environ.get("SWIZZLE_TEST_EMBED_GGUF")
 
 
 class Errors(unittest.TestCase):
     def test_missing_file(self):
         with self.assertRaises(RuntimeError) as e:
-            kinetic.Model("no-such-model.gguf")
+            swizzle.Model("no-such-model.gguf")
         self.assertIn("no-such-model.gguf", str(e.exception))
 
     def test_version(self):
-        self.assertRegex(kinetic.__version__, r"^\d+\.\d+\.\d+")
+        self.assertRegex(swizzle.__version__, r"^\d+\.\d+\.\d+")
 
 
-@unittest.skipUnless(TEXT, "set KINETIC_TEST_GGUF")
+@unittest.skipUnless(TEXT, "set SWIZZLE_TEST_GGUF")
 class TextModel(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.model = kinetic.Model(TEXT)
+        cls.model = swizzle.Model(TEXT)
 
     def test_greedy_chat_is_repeatable_and_streams_the_same_text(self):
         messages = [{"role": "user", "content": "What is the capital of France?"}]
@@ -68,10 +68,10 @@ class TextModel(unittest.TestCase):
             self.model.embed(["text"])
 
 
-@unittest.skipUnless(EMBED, "set KINETIC_TEST_EMBED_GGUF")
+@unittest.skipUnless(EMBED, "set SWIZZLE_TEST_EMBED_GGUF")
 class EmbeddingModel(unittest.TestCase):
     def test_vectors(self):
-        model = kinetic.Model(EMBED)
+        model = swizzle.Model(EMBED)
         a, b = model.embed(["a cat", "a dog"])
         self.assertEqual(len(a), len(b))
         self.assertGreater(len(a), 0)

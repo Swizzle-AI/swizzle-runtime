@@ -1,6 +1,6 @@
 # Client compatibility
 
-What was checked against `kinetic serve` on Windows 11 (CPU, LFM3 1.7B
+What was checked against `swizzle-rt serve` on Windows 11 (CPU, LFM3 1.7B
 Q4_K_M with `-c 512`, and bge-small for embeddings). The client libraries
 themselves were not installed: each row replays the HTTP requests that client
 sends, with the same paths, fields and headers, from a Python script using
@@ -32,7 +32,7 @@ stream, 100 parallel connections and 8 parallel chats, then checks that the
 server still answers:
 
 ```sh
-python scripts/server_abuse.py -- kinetic serve model.gguf -c 512 --port 8091
+python scripts/server_abuse.py -- swizzle-rt serve model.gguf -c 512 --port 8091
 ```
 
 A client that sends its headers and then stalls is disconnected after 30

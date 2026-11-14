@@ -1,5 +1,5 @@
 [package]
-name = "kinetic-python"
+name = "swizzle-python"
 description = "Python bindings for Swizzle Runtime"
 version = "0.1.0"
 edition = "2021"
@@ -8,11 +8,11 @@ license = "Apache-2.0"
 publish = false
 
 [lib]
-name = "kinetic_python"
+name = "swizzle_python"
 crate-type = ["cdylib"]
 
 [dependencies]
-kinetic = { path = "../../crates/kinetic" }
+swizzle = { path = "../../crates/swizzle" }
 pyo3 = { version = "0.21.2", features = ["abi3-py39", "extension-module"] }
 
 # Built by maturin on its own, so the engine's workspace never needs Python.

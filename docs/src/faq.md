@@ -11,20 +11,20 @@ on x86-64.
 **Is the output really the same with all the speed-ups?** Yes. Greedy
 decoding gives the same tokens as plain decoding, and sampling with a seed
 gives the same answer for the same seed. The test suite checks this on real
-models, and `kinetic bench` checks it on your machine. The CPU and the GPU
+models, and `swizzle-rt bench` checks it on your machine. The CPU and the GPU
 round differently, so a CPU answer and a GPU answer to the same prompt can
 differ; each is exact for its device.
 
-**Will my llama.cpp models work?** If `kinetic info` lists the architecture
+**Will my llama.cpp models work?** If `swizzle-rt info` lists the architecture
 as supported and the file loads, yes, unchanged. See
 [Models and formats](models.md).
 
 **Does Swizzle Runtime collect data or need an account?** No. Swizzle Runtime never connects
-to the network, except when you run `kinetic pull`. `run`, `chat` and `serve`
+to the network, except when you run `swizzle-rt pull`. `run`, `chat` and `serve`
 never download anything, and there is no telemetry and no update check.
 
 **What does Swizzle Runtime store on my disk?** Only Warm Start's prompt states, in
-`kinetic/warm` under your cache directory (`%LOCALAPPDATA%` on Windows,
+`swizzle/warm` under your cache directory (`%LOCALAPPDATA%` on Windows,
 `~/.cache` on Linux), up to 2 GiB. They are derived from your prompts, so
 treat them like your chat history. Delete the folder to clear them, or run
 with `--no-prompt-cache` to keep nothing.
@@ -42,7 +42,7 @@ problems privately to contact@swizzle-ai.github.io, see
 
 ### `--device auto` uses the CPU although I have an NVIDIA GPU
 
-Swizzle Runtime prints the reason on one line, starting with `kinetic: running on
+Swizzle Runtime prints the reason on one line, starting with `swizzle: running on
 the CPU, the GPU is not usable:`. The common ones:
 
 - **The driver is missing or old.** Install the current driver from NVIDIA.
@@ -77,7 +77,7 @@ the CPU, the GPU is not usable:`. The common ones:
 
 - Check that your CPU has AVX2 (Intel Core since 2013, every AMD Ryzen).
   Without it Swizzle Runtime runs on a much slower path.
-- Try fewer threads: `kinetic bench model.gguf --device cpu -t 6` with the
+- Try fewer threads: `swizzle-rt bench model.gguf --device cpu -t 6` with the
   number of physical cores often beats the default of all logical CPUs.
 - On a laptop, plug in and choose the best-performance power mode.
 - Other programs using the CPU slow generation down a lot.
@@ -87,13 +87,13 @@ the CPU, the GPU is not usable:`. The common ones:
 See [Files that do not load](models.md#files-that-do-not-load) for what each
 message means. Then open a
 [model not supported issue](https://github.com/Swizzle-AI/swizzle-runtime/issues/new?template=model-not-supported.yml)
-with the output of `kinetic info`.
+with the output of `swizzle-rt info`.
 
 ### The model answers in a strange way
 
 - Check the sampling: some GGUF files carry their own defaults, such as a
   repeat penalty. Compare with `--temp 0 --repeat-penalty 1`.
-- Make sure the file has a chat template (`kinetic info` shows its size). A
+- Make sure the file has a chat template (`swizzle-rt info` shows its size). A
   base model without one is meant for `/v1/completions`, not chat.
 - Compare with llama.cpp on the same file and prompt, greedy on both sides.
   If they differ early in the answer, please file a bug.
@@ -101,17 +101,17 @@ with the output of `kinetic info`.
 ### Windows says the file is not commonly downloaded
 
 New releases have no download history yet, so SmartScreen may show
-"Windows protected your PC" the first time you run `kinetic.exe`. Check the
+"Windows protected your PC" the first time you run `swizzle.exe`. Check the
 archive against `SHA256SUMS` from the release page, then choose **More
 info** and **Run anyway**. You can also unblock the archive before you
 unpack it: right-click it, **Properties**, tick **Unblock**.
 
-### My antivirus flags or slows down kinetic.exe
+### My antivirus flags or slows down swizzle.exe
 
 Some antivirus programs flag new, unsigned binaries, or scan model files
 every time they are read, which makes loading slow. Verify the download
 against `SHA256SUMS`, and if you trust it, add an exception for
-`kinetic.exe` and the folder that holds your models. Builds from source
+`swizzle.exe` and the folder that holds your models. Builds from source
 behave the same.
 
 ### The server cannot be reached from another computer or a container

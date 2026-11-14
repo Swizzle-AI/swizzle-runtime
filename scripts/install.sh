@@ -67,7 +67,7 @@ version="${version#v}"
 # the cuda archive is the full build: CUDA, Vulkan and the CPU in one binary
 [ -n "$variant" ] || variant=cuda
 
-name="kinetic-${version}-linux-x86_64-${variant}"
+name="swizzle-${version}-linux-x86_64-${variant}"
 base="https://github.com/$repo/releases/download/v${version}"
 echo "Downloading Swizzle Runtime ${version} (${variant} build)"
 fetch "$base/$name.tar.gz" "$tmp/$name.tar.gz"
@@ -80,13 +80,13 @@ actual=$(sha256 "$tmp/$name.tar.gz")
 
 tar -xzf "$tmp/$name.tar.gz" -C "$tmp"
 mkdir -p "$prefix/bin" "$prefix/lib" "$prefix/include"
-install -m 755 "$tmp/$name/kinetic" "$prefix/bin/kinetic"
+install -m 755 "$tmp/$name/swizzle" "$prefix/bin/swizzle"
 cp "$tmp/$name/lib/"* "$prefix/lib/"
 cp "$tmp/$name/include/"* "$prefix/include/"
 
-"$prefix/bin/kinetic" --version
+"$prefix/bin/swizzle" --version
 case ":${PATH}:" in
     *":$prefix/bin:"*) ;;
     *) echo "Add $prefix/bin to your PATH, for example: echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.profile" ;;
 esac
-echo "Installed in $prefix/bin. Try: kinetic doctor"
+echo "Installed in $prefix/bin. Try: swizzle doctor"

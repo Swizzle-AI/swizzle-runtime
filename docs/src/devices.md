@@ -24,14 +24,14 @@ GPU](#dense-models-larger-than-the-gpu)).
 With `auto`, Swizzle Runtime skips a GPU it cannot use with one line that says why:
 
 ```text
-kinetic: running on the CPU; CUDA is not usable: <reason>; Vulkan is not usable: <reason>
+swizzle: running on the CPU; CUDA is not usable: <reason>; Vulkan is not usable: <reason>
 ```
 
 The reasons are: no NVIDIA driver, a build without the CUDA kernels, a model
 whose weights and caches do not fit in the GPU's free memory, or a model
 that uses something the GPU code does not have yet (see the CUDA column in
-[Models and formats](models.md)). The start-up line of `kinetic serve` and
-the status line of `kinetic run` name the device that is used:
+[Models and formats](models.md)). The start-up line of `swizzle-rt serve` and
+the status line of `swizzle-rt run` name the device that is used:
 
 ```text
 Serving Qwen3.5-4B-MTP-Q4_K_M on NVIDIA GeForce RTX 3060 Laptop GPU at http://127.0.0.1:8080/v1
@@ -51,7 +51,7 @@ much slower path.
 `-t` sets the number of threads; by default Swizzle Runtime uses every logical CPU.
 Generation is limited by memory bandwidth, so more threads than physical
 cores rarely help, and on some machines fewer threads are faster. Measure
-with `kinetic bench model.gguf --device cpu -t N`.
+with `swizzle-rt bench model.gguf --device cpu -t N`.
 
 ## NVIDIA GPUs
 
@@ -117,11 +117,11 @@ in quality, not identical, and never what the exactness checks compare
 against. It is off by default. The CPU and Vulkan paths ignore it.
 
 **Warm Start keeps prompt states** in up to 1 GiB of RAM and 2 GiB on disk,
-under `--cache-dir` (by default `kinetic/warm` in `%LOCALAPPDATA%` on
+under `--cache-dir` (by default `swizzle/warm` in `%LOCALAPPDATA%` on
 Windows and `$XDG_CACHE_HOME` or `~/.cache` on Linux). `--no-prompt-cache`
 turns it off.
 
-`kinetic bench` reports the peak memory of a run.
+`swizzle-rt bench` reports the peak memory of a run.
 
 ## Mixture-of-experts offload
 

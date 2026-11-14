@@ -26,10 +26,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "${{ inputs.tag || github.ref_name }}" --pattern "*.whl" --dir dist
-      - name: llama-cpp-kinetic
+      - name: llama-cpp-swizzle
         run: |
           pip install build
-          python -m build bindings/llama-cpp-kinetic --outdir dist
+          python -m build bindings/llama-cpp-swizzle --outdir dist
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true

@@ -1,6 +1,6 @@
 # Server API
 
-`kinetic serve <model>` speaks the OpenAI API at `http://127.0.0.1:8080/v1`.
+`swizzle-rt serve <model>` speaks the OpenAI API at `http://127.0.0.1:8080/v1`.
 Any OpenAI client works: point its base URL there and give any API key.
 
 | Endpoint | Method | Served for |
@@ -29,7 +29,7 @@ curl http://127.0.0.1:8080/v1/models
 
 ```json
 {"object": "list", "data": [{"id": "model", "object": "model", "created": 1762171200,
-  "owned_by": "kinetic", "context_length": 32768}]}
+  "owned_by": "swizzle", "context_length": 32768}]}
 ```
 
 The id is the model's file name without its extension. One model is served;
@@ -203,7 +203,7 @@ may use one of `grammar` and `response_format`, not both.
 
 `"receipt": true` on `/v1/chat/completions` or `/v1/completions` adds a
 `receipt` object to the response (to the last chunk of a stream) that
-`kinetic verify-receipt` can rerun; see [Receipts](receipts.md). A request
+`swizzle-rt verify-receipt` can rerun; see [Receipts](receipts.md). A request
 without a `seed` gets a fresh one, recorded in the receipt. Receipts are
 signed when the server was started with `--sign-key`. Requests with images
 cannot have a receipt yet.
@@ -213,7 +213,7 @@ curl http://127.0.0.1:8080/v1/chat/completions -H "Content-Type: application/jso
   "messages": [{"role": "user", "content": "Name three rivers."}],
   "temperature": 0.8, "seed": 42, "receipt": true
 }' | python -c "import json,sys; json.dump(json.load(sys.stdin)['receipt'], open('answer.json','w'))"
-kinetic verify-receipt answer.json
+swizzle-rt verify-receipt answer.json
 ```
 
 ### Reasoning
@@ -282,7 +282,7 @@ apart from `messages` and `chat_template_kwargs`, and answers with
 ## Embeddings
 
 ```sh
-kinetic serve bge-small-en-v1.5-f16.gguf
+swizzle-rt serve bge-small-en-v1.5-f16.gguf
 curl http://127.0.0.1:8080/v1/embeddings -H "Content-Type: application/json" \
   -d '{"input": ["a cat", "a dog"]}'
 ```
@@ -300,7 +300,7 @@ for little-endian 32-bit floats.
 ## Rerank
 
 ```sh
-kinetic serve qwen3-reranker-0.6b-q8_0.gguf
+swizzle-rt serve qwen3-reranker-0.6b-q8_0.gguf
 curl http://127.0.0.1:8080/v1/rerank -H "Content-Type: application/json" -d '{
   "query": "What is the capital of China?",
   "documents": ["The capital of China is Beijing.", "Gravity pulls bodies together."],
@@ -358,7 +358,7 @@ usage says how many prompt tokens were reused.
 ## Ollama API
 
 The same server answers Ollama's API, so apps written for Ollama work
-unchanged; `kinetic serve <model> --ollama` listens on Ollama's port 11434.
+unchanged; `swizzle-rt serve <model> --ollama` listens on Ollama's port 11434.
 
 | Endpoint | Does |
 |---|---|
@@ -425,5 +425,5 @@ another address with `--host` makes the model usable by anyone who can reach
 that address; use `--api-key` there, and a TLS proxy if the key crosses an
 untrusted network. Browsers cannot send JSON to the server from another site, so web
 pages you visit cannot use it. A client has 30 seconds to send its request.
-Swizzle Runtime never connects to the network, except when you run `kinetic pull`.
+Swizzle Runtime never connects to the network, except when you run `swizzle-rt pull`.
 The server never downloads anything.

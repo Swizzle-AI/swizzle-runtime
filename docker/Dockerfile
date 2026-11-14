@@ -8,7 +8,7 @@ WORKDIR /src
 # Only the sources: rust-toolchain.toml would make rustup fetch another toolchain.
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
-RUN cargo build --release --locked -p kinetic-cli --no-default-features
+RUN cargo build --release --locked -p swizzle-cli --no-default-features
 
 FROM debian:bookworm-slim
 COPY --from=build /src/target/release/swizzle-rt /usr/local/bin/swizzle-rt

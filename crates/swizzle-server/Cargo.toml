@@ -1,0 +1,29 @@
+[package]
+name = "swizzle-server"
+description = "Generation engine and OpenAI-compatible HTTP server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+cuda = ["dep:swizzle-cuda", "swizzle-models/cuda", "swizzle-vision/cuda"]
+vulkan = ["dep:swizzle-vulkan", "swizzle-models/vulkan"]
+
+[dependencies]
+blake3 = { version = "1.8.7", features = ["mmap", "rayon"] }
+swizzle-cuda = { path = "../swizzle-cuda", optional = true }
+swizzle-gguf = { path = "../swizzle-gguf" }
+swizzle-grammar = { path = "../swizzle-grammar" }
+swizzle-ktc = { path = "../swizzle-ktc" }
+swizzle-models = { path = "../swizzle-models" }
+swizzle-tokenizer = { path = "../swizzle-tokenizer" }
+swizzle-vision = { path = "../swizzle-vision" }
+swizzle-vulkan = { path = "../swizzle-vulkan", optional = true }
+minijinja = { version = "2.24.0", features = ["fuel", "json", "loop_controls"] }
+minijinja-contrib = { version = "2.24.0", features = ["pycompat"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+
+[dev-dependencies]
+ureq = { version = "2.12.1", default-features = false, features = ["json"] }

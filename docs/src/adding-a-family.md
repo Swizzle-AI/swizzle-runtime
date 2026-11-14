@@ -7,11 +7,11 @@
 </picture>
 </p>
 
-A family is one file in `crates/kinetic-models/src/arch/` that maps a GGUF
+A family is one file in `crates/swizzle-models/src/arch/` that maps a GGUF
 file's tensors onto shared blocks, plus one line in the family list. The
 file declares a `Family`: the GGUF architecture names it answers to, the
 function that builds its layers, and the few ways its embedding and head
-differ. Loading, `kinetic info`, `kinetic models` and the encoder checks all
+differ. Loading, `swizzle-rt info`, `swizzle-rt models` and the encoder checks all
 read the list, so nothing else needs registering.
 
 ## The short path
@@ -19,9 +19,9 @@ read the list, so nothing else needs registering.
 ```sh
 python scripts/new_family.py model.gguf          # prints the layout, writes arch/<name>.rs, registers it
 # map the tensors of one layer onto blocks in arch/<name>.rs
-cargo build --release -p kinetic-cli
-python scripts/conformance.py model.gguf --kinetic target/release/kinetic --llama path/to/llama.cpp
-KINETIC_TEST_GGUF=model.gguf cargo test --release -p kinetic-models --test architectures -- --ignored
+cargo build --release -p swizzle-cli
+python scripts/conformance.py model.gguf --swizzle target/release/swizzle --llama path/to/llama.cpp
+SWIZZLE_TEST_GGUF=model.gguf cargo test --release -p swizzle-models --test architectures -- --ignored
 ```
 
 `new_family.py` reads only the header. It prints the architecture name, the
@@ -35,8 +35,8 @@ LFM2 is gated short convolutions and attention with query and key norms.
 Its pull request touches exactly these files:
 
 ```text
-crates/kinetic-models/src/arch/lfm2.rs     new, about 80 lines
-crates/kinetic-models/src/arch/mod.rs      two lines
+crates/swizzle-models/src/arch/lfm2.rs     new, about 80 lines
+crates/swizzle-models/src/arch/mod.rs      two lines
 docs/src/models.md                         one table row
 README.md                                  the model in the supported list
 CHANGELOG.md                               one line
@@ -125,7 +125,7 @@ the difference with the flags that file already has, the way `olmo2` and
 
 ## Blocks
 
-`crates/kinetic-models/src/blocks/` holds the building blocks. A `Layer`
+`crates/swizzle-models/src/blocks/` holds the building blocks. A `Layer`
 is an optional norm, a mixer, an optional output norm, then the same around
 a feed-forward:
 
@@ -182,7 +182,7 @@ Open an issue first. A new mixer or feed-forward lands in this order:
 ## Testing
 
 Compare greedy output with llama.cpp. `scripts/conformance.py` runs
-`kinetic serve` and then `llama-server` on the same file, one at a time,
+`swizzle-rt serve` and then `llama-server` on the same file, one at a time,
 sends a few fixed raw prompts with greedy sampling, and reports how many
 tokens agree. Where the two part it prints llama.cpp's two likeliest tokens
 there; a gap under 0.1 nats is a near-tie that differently rounded kernels
@@ -191,17 +191,17 @@ script exits with 1. On an RTX 3060 Laptop, LFM3 and Qwen3.5 part only at
 near-ties, and Qwen3.5's fourth answer ends after 32 tokens in both:
 
 ```text
-$ python scripts/conformance.py LFM3-1.7B-Q4_K_M.gguf --kinetic target/release/kinetic --llama llama-b12001 --device cuda
+$ python scripts/conformance.py LFM3-1.7B-Q4_K_M.gguf --swizzle target/release/swizzle --llama llama-b12001 --device cuda
 LFM3-1.7B-Q4_K_M.gguf on cuda, 64 greedy tokens per prompt
 prompt 1: 64/64 tokens agree
 prompt 2: 64/64 tokens agree
-prompt 3: 1/64 tokens agree; near-tie at token 1: llama.cpp top two 'Set' -1.167, 'Create' -1.253 (gap 0.086), kinetic 'Create a dedicated works'
+prompt 3: 1/64 tokens agree; near-tie at token 1: llama.cpp top two 'Set' -1.167, 'Create' -1.253 (gap 0.086), swizzle 'Create a dedicated works'
 prompt 4: 64/64 tokens agree
 total: 193/256 tokens agree
 
-$ python scripts/conformance.py Qwen3.5-4B-MTP-Q4_K_M.gguf --kinetic target/release/kinetic --llama llama-b12001 --device cuda
+$ python scripts/conformance.py Qwen3.5-4B-MTP-Q4_K_M.gguf --swizzle target/release/swizzle --llama llama-b12001 --device cuda
 Qwen3.5-4B-MTP-Q4_K_M.gguf on cuda, 64 greedy tokens per prompt
-prompt 1: 3/64 tokens agree; near-tie at token 3: llama.cpp top two 'A' -1.484, 'The' -1.499 (gap 0.014), kinetic 'The capital of France is'
+prompt 1: 3/64 tokens agree; near-tie at token 3: llama.cpp top two 'A' -1.484, 'The' -1.499 (gap 0.014), swizzle 'The capital of France is'
 prompt 2: 64/64 tokens agree
 prompt 3: 64/64 tokens agree
 prompt 4: 32/32 tokens agree
@@ -211,18 +211,18 @@ total: 163/224 tokens agree
 Then run the identity gates, the contract every family meets:
 
 ```sh
-KINETIC_TEST_GGUF=model.gguf cargo test --release -p kinetic-models --test architectures -- --ignored
-KINETIC_TEST_GGUF=model.gguf cargo test --release -p kinetic-models --features cuda --test cuda -- --ignored
+SWIZZLE_TEST_GGUF=model.gguf cargo test --release -p swizzle-models --test architectures -- --ignored
+SWIZZLE_TEST_GGUF=model.gguf cargo test --release -p swizzle-models --features cuda --test cuda -- --ignored
 ```
 
 - a batch gives the logits its tokens give one by one, bit for bit;
 - every row of a tree batch gives what its path gives alone;
 - speculative decoding reproduces plain greedy decoding token for token.
 
-Last, `kinetic run`, `kinetic bench` (it must print `drafted output
-identical to plain decoding: yes`) and `kinetic serve` with a real chat.
+Last, `swizzle-rt run`, `swizzle-rt bench` (it must print `drafted output
+identical to plain decoding: yes`) and `swizzle-rt serve` with a real chat.
 The tokenizer and chat template usually need nothing; a new BPE
-pre-tokenizer (`tokenizer.ggml.pre`) goes in `crates/kinetic-tokenizer/src/lib.rs`,
+pre-tokenizer (`tokenizer.ggml.pre`) goes in `crates/swizzle-tokenizer/src/lib.rs`,
 tested against `llama-tokenize` on the same file.
 
 ## Document it

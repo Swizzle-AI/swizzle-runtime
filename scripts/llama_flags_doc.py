@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes the llama.cpp flag table of the docs from crates/kinetic-cli/src/llama_flags.rs.
+"""Writes the llama.cpp flag table of the docs from crates/swizzle-cli/src/llama_flags.rs.
 
     python scripts/llama_flags_doc.py            # rewrite docs/src/llama-flags-table.md
     python scripts/llama_flags_doc.py --check    # fail if it is out of date
@@ -10,7 +10,7 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "crates/kinetic-cli/src/llama_flags.rs"
+SOURCE = ROOT / "crates/swizzle-cli/src/llama_flags.rs"
 TABLE = ROOT / "docs/src/llama-flags-table.md"
 
 
@@ -33,7 +33,7 @@ def flags(names):
 def prose(why):
     """The reason as markdown: commands in code spans, `<` escaped elsewhere."""
     if "`" not in why:
-        why = re.sub(r"(kinetic (?:run|chat|serve) .*)$", r"`\1`", why)
+        why = re.sub(r"(swizzle (?:run|chat|serve) .*)$", r"`\1`", why)
         why = re.sub(r"(^-t\b|--device$)", r"`\1`", why)
     parts = why.split("`")
     parts[::2] = [p.replace("<", "&lt;") for p in parts[::2]]

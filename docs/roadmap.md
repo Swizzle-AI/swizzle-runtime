@@ -33,11 +33,11 @@ changes to the command line or the server API that break existing use.
 ## Later
 
 - More architectures, driven by the "model not supported" issues.
-- Constrained output (`--grammar`, `--json-schema`) in `kinetic run`; it is
+- Constrained output (`--grammar`, `--json-schema`) in `swizzle-rt run`; it is
   in the server already.
 - Split GGUF files (`-00001-of-0000N.gguf`) read directly.
 - `n` greater than 1 in the server API.
-- `--imatrix` for `kinetic quantize`.
+- `--imatrix` for `swizzle quantize`.
 - Tools to convert and sign `.ktc` files from the command line.
 
 Swizzle Runtime supports Windows and Linux on x86-64. macOS is not on the roadmap.

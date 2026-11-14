@@ -7,11 +7,11 @@ Swizzle Runtime runs language, embedding and reranking models on your own comput
 from one binary with an OpenAI-compatible server. It is written in Rust,
 runs on Windows and Linux (x86-64), on the CPU, on NVIDIA GPUs through CUDA
 and on AMD and Intel GPUs through Vulkan. Swizzle Runtime
-never connects to the network, except when you run `kinetic pull`.
+never connects to the network, except when you run `swizzle-rt pull`.
 
 ```sh
-kinetic run Qwen3.5-4B-Q4_K_M.gguf "Explain recursion in two sentences."
-kinetic serve Qwen3.5-4B-Q4_K_M.gguf     # OpenAI API at http://127.0.0.1:8080/v1
+swizzle-rt run Qwen3.5-4B-Q4_K_M.gguf "Explain recursion in two sentences."
+swizzle-rt serve Qwen3.5-4B-Q4_K_M.gguf     # OpenAI API at http://127.0.0.1:8080/v1
 ```
 
 ## Why Swizzle Runtime
@@ -29,7 +29,7 @@ kinetic serve Qwen3.5-4B-Q4_K_M.gguf     # OpenAI API at http://127.0.0.1:8080/v
   in video memory stay in system RAM, and Swizzle Runtime decides layer by layer
   where each one runs.
 - **Private by design.** Swizzle Runtime never connects to the network, except
-  when you run `kinetic pull`. No telemetry, no update checks, no accounts;
+  when you run `swizzle-rt pull`. No telemetry, no update checks, no accounts;
   `run`, `chat` and `serve` never download anything. The server listens on
   `127.0.0.1` and refuses requests from web pages.
 - **Drop-in for llama.cpp users.** The common flags work as they do in
@@ -37,7 +37,7 @@ kinetic serve Qwen3.5-4B-Q4_K_M.gguf     # OpenAI API at http://127.0.0.1:8080/v
   no equivalent stop with a line saying what to use instead. See [llama.cpp flags](llama-flags.md).
 - **Verifiable models.** A `.ktc` file carries weights, tokenizer and chat
   template with a hash of every byte and an optional signature, and
-  `kinetic verify` checks them.
+  `swizzle-rt verify` checks them.
 
 ## Where to go next
 

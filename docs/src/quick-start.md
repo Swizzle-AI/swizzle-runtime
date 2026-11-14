@@ -1,12 +1,12 @@
 # Quick start
 
-This page assumes `kinetic` is [installed](install.md) and you have a model
+This page assumes `swizzle` is [installed](install.md) and you have a model
 file; the examples use `model.gguf`.
 
 ## Ask one question
 
 ```sh
-kinetic run model.gguf "Explain recursion in two sentences."
+swizzle-rt run model.gguf "Explain recursion in two sentences."
 ```
 
 The answer streams to the terminal as it is written. When it is done, a
@@ -20,14 +20,14 @@ Recursion is a programming technique where a function calls itself ...
 Without a prompt, `run` reads it from stdin, so files and pipes work:
 
 ```sh
-kinetic run model.gguf < prompt.txt
-git diff | kinetic run model.gguf --system "Write a commit message for this diff." -n 100
+swizzle-rt run model.gguf < prompt.txt
+git diff | swizzle-rt run model.gguf --system "Write a commit message for this diff." -n 100
 ```
 
 ## Chat
 
 ```sh
-kinetic chat model.gguf --system "You are a concise assistant."
+swizzle-rt chat model.gguf --system "You are a concise assistant."
 ```
 
 Type a message and press Enter. `/clear` starts a new conversation and
@@ -40,8 +40,8 @@ By default Swizzle Runtime uses the sampling settings the model file recommends.
 Override them as in llama.cpp:
 
 ```sh
-kinetic run model.gguf "Write a haiku about rivers." --temp 0.8 --top-p 0.95 --seed 42
-kinetic run model.gguf "List the planets." --temp 0 -n 64
+swizzle-rt run model.gguf "Write a haiku about rivers." --temp 0.8 --top-p 0.95 --seed 42
+swizzle-rt run model.gguf "List the planets." --temp 0 -n 64
 ```
 
 `--temp 0` always takes the likeliest token. With a seed, the same command
@@ -50,7 +50,7 @@ gives the same answer every time; speculative decoding never changes that.
 ## Serve an OpenAI-compatible API
 
 ```sh
-kinetic serve model.gguf
+swizzle-rt serve model.gguf
 ```
 
 ```text
@@ -95,7 +95,7 @@ and field.
 ## See what a file holds
 
 ```sh
-kinetic info model.gguf
+swizzle-rt info model.gguf
 ```
 
 prints the architecture, size, context length, weight types and tokenizer,
@@ -104,7 +104,7 @@ and says if the architecture is not supported yet.
 ## Measure your machine
 
 ```sh
-kinetic bench model.gguf
+swizzle-rt bench model.gguf
 ```
 
 runs llama-bench's two tests (a 512-token prompt and 128 generated tokens)

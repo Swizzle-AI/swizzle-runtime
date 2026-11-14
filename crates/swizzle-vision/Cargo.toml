@@ -1,0 +1,23 @@
+[package]
+name = "swizzle-vision"
+description = "Image encoders that turn pictures into language-model embeddings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+cuda = ["dep:swizzle-cuda", "dep:half"]
+
+[dependencies]
+half = { workspace = true, optional = true }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp", "bmp", "gif"] }
+swizzle-cpu = { path = "../swizzle-cpu" }
+swizzle-cuda = { path = "../swizzle-cuda", optional = true }
+swizzle-gguf = { path = "../swizzle-gguf" }
+swizzle-quant = { path = "../swizzle-quant" }
+rayon.workspace = true
+
+[dev-dependencies]
+swizzle-models = { path = "../swizzle-models" }
+swizzle-tokenizer = { path = "../swizzle-tokenizer" }

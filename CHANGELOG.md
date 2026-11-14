@@ -19,11 +19,11 @@ The first public release.
 
 ### Command line
 
-- `kinetic run`, `chat`, `serve`, `bench`, `info` and `verify`.
+- `swizzle-rt run`, `chat`, `serve`, `bench`, `info` and `verify`.
 - Common llama.cpp flags work unchanged (`-m`, `-p`, `-n`, `-c`, `-t`, `-s`,
   `--temp`, `-ngl`, `-dev` and others); the ones Swizzle Runtime does not need are
   explained instead of rejected.
-- `kinetic bench` runs llama-bench's pp512 and tg128 tests, plus an edit test
+- `swizzle-rt bench` runs llama-bench's pp512 and tg128 tests, plus an edit test
   that checks drafted output against plain decoding.
 
 ### Server
@@ -65,8 +65,8 @@ The first public release.
 
 ### Libraries
 
-- Python package `kinetic`, C API (`kinetic.h`, `kinetic_capi`) and the Rust
-  crate `kinetic`.
+- Python package `swizzle`, C API (`swizzle.h`, `swizzle_capi`) and the Rust
+  crate `swizzle`.
 - Release archives for Windows and Linux, CPU and CUDA, and Dockerfiles.
 
 [Unreleased]: https://github.com/Swizzle-AI/swizzle-runtime/compare/v0.1.0...HEAD

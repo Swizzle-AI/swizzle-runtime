@@ -2,7 +2,7 @@
 """Starts a new model family from a GGUF file.
 
 Prints the file's architecture, its `<arch>.*` metadata and the tensors of
-one layer, writes crates/kinetic-models/src/arch/<name>.rs as a Llama-style
+one layer, writes crates/swizzle-models/src/arch/<name>.rs as a Llama-style
 starter that builds, and adds it to the family list. What is left is
 mapping the tensors onto blocks; see docs/src/adding-a-family.md.
 
@@ -18,7 +18,7 @@ import re
 import struct
 import sys
 
-ARCH_DIR = os.path.join("crates", "kinetic-models", "src", "arch")
+ARCH_DIR = os.path.join("crates", "swizzle-models", "src", "arch")
 
 # GGUF value types, see the GGUF spec in ggml's docs/gguf.md
 SCALARS = {0: "<B", 1: "<b", 2: "<H", 3: "<h", 4: "<I", 5: "<i", 6: "<f", 7: "<?",

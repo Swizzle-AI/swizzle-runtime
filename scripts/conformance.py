@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Greedy token agreement between Swizzle Runtime and llama.cpp on one GGUF file.
 
-Runs `kinetic serve` and then `llama-server` on the same model, one at a
+Runs `swizzle-rt serve` and then `llama-server` on the same model, one at a
 time, sends each the same raw prompts with greedy sampling and compares
 the generated tokens one by one. Where they part, it prints llama.cpp's
 two likeliest tokens there; a gap under --tie nats is flagged as a
@@ -9,7 +9,7 @@ near-tie, which quantized kernels may break either way. Swizzle Runtime's tokens
 come from a second run with logprobs, whose text has to match the plain
 run's.
 
-    python scripts/conformance.py model.gguf --kinetic target/release/kinetic \\
+    python scripts/conformance.py model.gguf --swizzle target/release/swizzle \\
         --llama path/to/llama.cpp/bin --device cpu
 
 Standard library only. Exits 1 when a prompt parts before --early tokens
@@ -73,9 +73,9 @@ class Server:
         self.proc.wait()
 
 
-def kinetic_texts(a):
+def swizzle_texts(a):
     port = a.port
-    args = [a.kinetic, "serve", a.model, "--port", str(port), "--device", a.device,
+    args = [a.swizzle, "serve", a.model, "--port", str(port), "--device", a.device,
             "--parallel", "1", "--no-prompt-cache", "-c", "4096"]
     base = f"http://127.0.0.1:{port}"
     with Server(args, base + "/health"):
@@ -120,7 +120,7 @@ def compare(tokens, steps, tie):
     for i, step in enumerate(steps):
         if tokens[i:i + 1] == [step["token"]]:
             continue
-        # kinetic leaves out the end-of-text token llama.cpp shows as ''
+        # swizzle leaves out the end-of-text token llama.cpp shows as ''
         if i == len(tokens) and not step["token"]:
             continue
         tops = step.get("top_logprobs") or step.get("top_probs") or []
@@ -145,7 +145,7 @@ def main():
     self_check()
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("model")
-    ap.add_argument("--kinetic", default="kinetic")
+    ap.add_argument("--swizzle", default="swizzle")
     ap.add_argument("--llama", required=True, help="folder with llama-server")
     ap.add_argument("--device", choices=["cpu", "cuda"], default="cpu")
     ap.add_argument("-n", type=int, default=64, help="tokens per prompt")
@@ -156,14 +156,14 @@ def main():
     ap.add_argument("--early", type=int, default=16)
     a = ap.parse_args()
 
-    texts = kinetic_texts(a)
+    texts = swizzle_texts(a)
     runs = llama_runs(a)
     print(f"{os.path.basename(a.model)} on {a.device}, {a.n} greedy tokens per prompt")
     failed = False
     total = agreed_all = 0
     for k, ((text, tokens), steps) in enumerate(zip(texts, runs)):
         if "".join(tokens) != text:
-            print(f"prompt {k + 1}: kinetic text changes with logprobs")
+            print(f"prompt {k + 1}: swizzle text changes with logprobs")
             failed = True
             continue
         agreed, diff = compare(tokens, steps, a.tie)
@@ -175,7 +175,7 @@ def main():
             alts = ", ".join(f"{t!r} {lp:.3f}" for t, lp in top)
             kind = "near-tie" if tied else "DIVERGES"
             gap = f"{gap:.3f}" if gap is not None else "?"
-            line += f"; {kind} at token {pos}: llama.cpp top two {alts} (gap {gap}), kinetic {kin!r}"
+            line += f"; {kind} at token {pos}: llama.cpp top two {alts} (gap {gap}), swizzle {kin!r}"
             failed |= not tied and pos < a.early
         print(line)
     print(f"total: {agreed_all}/{total} tokens agree")

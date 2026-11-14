@@ -5,9 +5,9 @@ running ones), sends each the same requests, and lists every JSON key and
 type that differs. Standard library only.
 
     python scripts/llama_server_compat.py --model model.gguf \
-        --llama-server path/to/llama-server --kinetic path/to/kinetic
+        --llama-server path/to/llama-server --swizzle path/to/swizzle
     python scripts/llama_server_compat.py --oracle-url http://127.0.0.1:8080 \
-        --kinetic-url http://127.0.0.1:8081
+        --swizzle-url http://127.0.0.1:8081
 """
 
 import argparse
@@ -118,15 +118,15 @@ def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--model", help="GGUF to start both servers on")
     p.add_argument("--llama-server", default="llama-server")
-    p.add_argument("--kinetic", default="kinetic")
+    p.add_argument("--swizzle", default="swizzle")
     p.add_argument("--oracle-url", default="http://127.0.0.1:18080")
-    p.add_argument("--kinetic-url", default="http://127.0.0.1:18081")
+    p.add_argument("--swizzle-url", default="http://127.0.0.1:18081")
     args = p.parse_args()
 
     procs = []
     if args.model:
         flags = ["-m", args.model, "-ngl", "0", "-c", "4096", "-t", "4", "-np", "1"]
-        for cmd, url in [([args.llama_server], args.oracle_url), ([args.kinetic, "serve"], args.kinetic_url)]:
+        for cmd, url in [([args.llama_server], args.oracle_url), ([args.swizzle, "serve"], args.swizzle_url)]:
             port = url.rsplit(":", 1)[1]
             procs.append(
                 subprocess.Popen(
@@ -137,21 +137,21 @@ def main():
             )
     try:
         wait(args.oracle_url, procs[0] if procs else None)
-        wait(args.kinetic_url, procs[1] if procs else None)
-        report(args.oracle_url, args.kinetic_url)
+        wait(args.swizzle_url, procs[1] if procs else None)
+        report(args.oracle_url, args.swizzle_url)
     finally:
         for proc in procs:
             proc.kill()
 
 
-def report(oracle, kinetic):
+def report(oracle, swizzle):
     total = 0
     ids = None
     for method, path, body in REQUESTS:
         if path == "/detokenize":
             body = {"tokens": ids}
         sa, a = call(oracle, method, path, body)
-        sb, b = call(kinetic, method, path, body)
+        sb, b = call(swizzle, method, path, body)
         if path == "/tokenize" and ids is None:
             ids = a["tokens"]
         label = f"{method} {path}" + (f" {json.dumps(body)[:70]}" if body else "")

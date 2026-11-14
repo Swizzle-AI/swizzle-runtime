@@ -17,9 +17,9 @@ the CUDA kernels also need the CUDA toolkit.
 
 ```sh
 git clone https://github.com/Swizzle-AI/swizzle-runtime
-cd kinetic
-cargo build --release -p kinetic-cli
-target/release/kinetic --version
+cd swizzle
+cargo build --release -p swizzle-cli
+target/release/swizzle --version
 ```
 
 The `cuda` feature is on by default. The build looks for `nvcc` in `$NVCC`,
@@ -29,7 +29,7 @@ binary runs on the CPU and says so when you ask for `--device cuda`. To build
 without CUDA at all:
 
 ```sh
-cargo build --release -p kinetic-cli --no-default-features
+cargo build --release -p swizzle-cli --no-default-features
 ```
 
 On Windows, `nvcc` needs `cl.exe`. From a plain shell, the build finds the
@@ -42,13 +42,13 @@ Blackwell (sm_120), plus PTX that newer drivers can compile for later GPUs.
 Install the binary into `~/.cargo/bin`:
 
 ```sh
-cargo install --path crates/kinetic-cli
+cargo install --path crates/swizzle-cli
 ```
 
 ## The libraries
 
 ```sh
-cargo build --release -p kinetic-capi        # kinetic_capi.dll / libkinetic_capi.so
+cargo build --release -p swizzle-capi        # swizzle_capi.dll / libswizzle_capi.so
 ```
 
 The Python package lives outside the workspace, so that building the engine
@@ -58,17 +58,17 @@ never needs Python, and builds with [maturin](https://www.maturin.rs):
 cd bindings/python
 pip install "maturin>=1.5,<2"
 maturin build --release
-pip install target/wheels/kinetic_engine-*.whl
+pip install target/wheels/swizzle_engine-*.whl
 ```
 
 ## Docker
 
 ```sh
-docker build -f docker/Dockerfile -t kinetic .              # CPU
-docker build -f docker/Dockerfile.cuda -t kinetic:cuda .    # NVIDIA GPUs
+docker build -f docker/Dockerfile -t swizzle .              # CPU
+docker build -f docker/Dockerfile.cuda -t swizzle:cuda .    # NVIDIA GPUs
 ```
 
-Both images run `kinetic serve` on port 8080 as an unprivileged user; see
+Both images run `swizzle-rt serve` on port 8080 as an unprivileged user; see
 [Install](install.md#docker).
 
 ## Tests
@@ -78,16 +78,16 @@ cargo test --release --workspace
 ```
 
 Tests that need a real model are marked `#[ignore]`. Point them at a file
-with `KINETIC_TEST_GGUF` and include them:
+with `SWIZZLE_TEST_GGUF` and include them:
 
 ```sh
-KINETIC_TEST_GGUF=SmolLM2-135M-Instruct-f16.gguf \
-  cargo test --release -p kinetic-models --test architectures -- --ignored
+SWIZZLE_TEST_GGUF=SmolLM2-135M-Instruct-f16.gguf \
+  cargo test --release -p swizzle-models --test architectures -- --ignored
 ```
 
 The CUDA kernel tests run when a GPU and the kernels are present and print
 `skipped: ...` otherwise; the model tests on the GPU take `--features cuda`
-on `kinetic-models`. Test in release mode: real models in a debug build are
+on `swizzle-models`. Test in release mode: real models in a debug build are
 very slow.
 
 ## Checks before a pull request
