@@ -50,6 +50,14 @@ Every speed-up preserves deterministic greedy output and reproducible inference 
 curl -fsSL https://raw.githubusercontent.com/Swizzle-AI/swizzle-runtime/main/install.sh | sh
 ```
 
+### One-Command Install (Windows x86_64)
+
+```powershell
+irm https://raw.githubusercontent.com/Swizzle-AI/swizzle-runtime/main/install.ps1 | iex
+```
+
+> **Note:** Prebuilt Windows binaries are not yet available. The script will fall back to building from source via `cargo`.
+
 ### Run with Docker (GHCR)
 
 ```sh
@@ -75,6 +83,26 @@ With CUDA support (requires `nvcc` 12.8+ for full `sm_75`..`sm_120` fatbins):
 ```sh
 cargo build --release --locked -p swizzle-cli --features cuda
 ```
+
+#### Windows
+
+Requires:
+- [Rust toolchain](https://rustup.rs/) (installs `cargo` + `rustc`)
+- [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with **Desktop development with C++** workload (provides MSVC compiler and `cl.exe`)
+- CUDA 12.8+ (optional, for GPU acceleration; provides `nvcc`)
+
+```powershell
+# CPU-only build
+cargo build --release --locked -p swizzle-cli --no-default-features
+
+# CPU + Vulkan (no CUDA toolkit required)
+cargo build --release --locked -p swizzle-cli
+
+# Full build with CUDA
+cargo build --release --locked -p swizzle-cli --features cuda
+```
+
+The compiled binary will be at `target\release\swizzle-rt.exe`. Add it to your PATH or copy it to a directory already in PATH.
 
 ### Run, Chat, Serve, Benchmark
 
