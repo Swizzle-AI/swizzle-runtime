@@ -14,11 +14,12 @@
 
 Written in pure Rust with custom x86-64 AVX2/F16C, NVIDIA CUDA (`sm_75`–`sm_120`), and cross-vendor Vulkan compute kernels. Runs on CPU, NVIDIA, AMD, and Intel GPUs from a single static binary — **with bit-for-bit identical output across every acceleration pass**.
 
+[![Technical Report](https://img.shields.io/badge/Technical_Report-28--Page_PDF_(SWZ--TR--2026--01)-c9ff3b?logo=adobeacrobatreader&logoColor=black)](docs/Swizzle_Runtime_Technical_Report.pdf)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![API](https://img.shields.io/badge/API-OpenAI%20%7C%20llama.cpp%20%7C%20Ollama-green.svg)](#server-and-apis)
 [![Twitter Follow](https://img.shields.io/badge/Twitter-@Swizzler112-1DA1F2?logo=x&logoColor=white)](https://x.com/Swizzler112)
 
-**[Swizzle AI](https://github.com/Swizzle-AI)** &emsp; **[Architecture](docs/src/how-it-is-fast.md)** &emsp; **[Benchmarks](docs/src/benchmarks.md)**
+**[Swizzle AI](https://github.com/Swizzle-AI)** &emsp; **[📄 28-Page Technical Report (PDF)](docs/Swizzle_Runtime_Technical_Report.pdf)** &emsp; **[Architecture](docs/src/how-it-is-fast.md)** &emsp; **[Benchmarks](docs/src/benchmarks.md)**
 
 <br>
 
@@ -43,6 +44,18 @@ Every speed-up preserves deterministic greedy output and reproducible inference 
   - Zero-copy CPU Shortlist + CUDA GPU-resident Shortlist screening inside single CUDA graphs
   - Thread-local `SINGLE_WORKSPACE` quantization buffers, physical-core `for_each_decode` scheduling, and zero-dependency `FxHashMap` session lookup
   - Built-in `swizzle-rt bench` latency telemetry (`ttft_ms`, decode ITL `p50`/`p95`/`p99`) and HTTP telemetry headers (`X-Swizzle-Backend`, `X-Swizzle-TTFT-Ms`, `X-Swizzle-Tokens-Per-Sec`, `X-Swizzle-Gen-Tokens`, `X-Swizzle-Receipt-Hash`)
+
+---
+
+## 📄 Technical Report (`SWZ-TR-2026-01`, 28 Pages)
+
+Read the full first-principles architecture paper and code breakdown in **[`docs/Swizzle_Runtime_Technical_Report.pdf`](docs/Swizzle_Runtime_Technical_Report.pdf)** ([LaTeX source](docs/Swizzle_Runtime_Technical_Report.tex)):
+
+- **18 Sections, 26 Equations, 10 Vector Diagrams, and 7 Benchmark/Taxonomy Tables** covering all 10 workspace crates (`swizzle-quant` through `swizzle-cli`).
+- **Hardware Kernel Proofs**: Zero-padding 16-byte XOR shared-memory permutation `gemm_swizzle(r, b) = b ^ ((r & 7) << 4)` eliminating 32-way bank conflicts on `ldmatrix.x4` (`Theorem 6.1`), IEEE-754 mantissa bias trick (`0x4B400000`) for Tensor Core `mma.sync` accumulation without `I2F` conversion, and compile-time balanced binary tree reductions (`TreeSum<K>`) guaranteeing batch-size invariance between `dp4a` and `mma.sync`.
+- **Exact Vocabulary Screening (`Shortlist`, `Theorem 9.1`)**: Three-term Cauchy-Schwarz + directed-rounded IEEE-754 upper bound (`R_head`, `R_copy`, `R_spread`, and $\delta_{\text{slack}} = (d+8)\cdot 2^{-23}$) with zero-sync GPU warp-ballot compaction (`__ballot_sync` + `__popc`), pruning 85%–97% of full-precision vocabulary rows with zero false negatives.
+- **Lossless Ensemble Speculative Decoding (`RAD-1`, `Theorem 10.1`)**: Online score-weighted ensemble combining a 262,144-token Suffix Automaton (`SessionIndex`), prompt suffix `Lookup`, and neural Multi-Token Prediction (`MtpDrafter`) with counterfactual EMA scoring and exact residual rejection sampling.
+- **Hybrid Recurrent & MoE Systems**: Chunked WY-style lower-triangular Gated DeltaNet prefill (`Proposition 8.1`), journaled recurrent rollback (`DeltaNetState` & `Mamba2State`), 256-token grid-aligned `Warm Start` prefix caching + `Zero Wait` live keystroke prefill, `Torque` device-resident `[pos, ids...]` CUDA graph replay, and `Convoy` 5 ms multi-sequence gathering.
 
 ---
 
