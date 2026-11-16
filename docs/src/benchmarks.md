@@ -50,6 +50,23 @@ python3 scripts/bench_vs_llamacpp.py model.gguf --llama-dir path/to/llama.cpp/bi
 
 ## Results
 
+### Datacenter GPU: NVIDIA L4 (24 GB Ada Lovelace, `sm_89`)
+
+Measured on Google Colab Pro on an **NVIDIA L4 Tensor Core GPU** (24 GB VRAM, `sm_89`, CUDA 13.0, driver 580.82.07) back-to-back against `llama.cpp` (`llama-bench -ngl 99`) running **`Qwen2.5-7B-Instruct-Q4_K_M.gguf`** (4.68 GiB, 7.62B parameters). Reproducible with one click via [`benchmarks/colab/swizzle_datacenter_benchmark.ipynb`](../../benchmarks/colab/swizzle_datacenter_benchmark.ipynb):
+
+| Model | Size | Device | Test | Baseline (t/s) | Swizzle Runtime (t/s) | Delta | Swizzle TTFT / ITL (ms) | Edit Exact |
+| :--- | ---: | :--- | :--- | ---: | ---: | ---: | :--- | :--- |
+| `Qwen2.5-7B-Instruct-Q4_K_M.gguf` | 4.68 GiB | NVIDIA L4 CUDA | `pp512` | 3507.28 | 3357.43 | 0.96x | TTFT 152.50 ms | yes |
+| `Qwen2.5-7B-Instruct-Q4_K_M.gguf` | 4.68 GiB | NVIDIA L4 CUDA | `tg128` | 53.80 | 53.63 | 1.00x | p50 18.59 / p95 19.40 / p99 19.80 | yes |
+| `Qwen2.5-7B-Instruct-Q4_K_M.gguf` | 4.68 GiB | NVIDIA L4 CUDA | `edit256` | 53.80 | **270.96** | **+403.6% (5.04x)** | - | yes |
+
+*Highlights:*
+- **RAD-1 Self-Speculative Acceleration**: Achieves **270.96 tok/s** on code-editing prompts, delivering a **5.04x speedup** over non-speculative execution while guaranteeing 100% token-for-token bit-exact identity (`edit_identical: true`).
+- **Predictable Latency Profile**: Sub-20 ms inter-token latency across all percentiles (p50: 18.59 ms, p95: 19.40 ms, p99: 19.80 ms) with no GC or page-fault spikes.
+- **Instant Model Load**: Cold start in **34 ms** (`0.034 s`) via direct 64-byte aligned virtual memory mapping.
+
+### Workstation & Edge: RTX 3050 Laptop & Ryzen 7
+
 Measured back-to-back in WSL2 (Ubuntu 24.04) on an **AMD Ryzen 7 170** (16 logical / 8
 physical cores) and **NVIDIA GeForce RTX 3050 Laptop GPU** (4 GB VRAM, `sm_86`,
 CUDA 12.8, NVIDIA driver 591.84). Thermally guarded at max `75 °C` with 5-second

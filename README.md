@@ -139,6 +139,18 @@ swizzle-rt bench path/to/model.gguf --device cuda
   <img src="assets/swizzle_benchmark_comparison.png" alt="Swizzle Runtime vs llama.cpp Benchmark Comparison" width="100%" />
 </p>
 
+### Enterprise Datacenter Benchmark (NVIDIA L4 24GB Ada Lovelace)
+
+Measured on Google Colab Pro on an **NVIDIA L4 Tensor Core GPU** (24 GB VRAM, `sm_89`, CUDA 13.0, driver 580.82.07) back-to-back against `llama.cpp` (`llama-bench -ngl 99`) running **`Qwen2.5-7B-Instruct-Q4_K_M.gguf`** (7.62B parameters). Reproducible with one click via [`benchmarks/colab/swizzle_datacenter_benchmark.ipynb`](benchmarks/colab/swizzle_datacenter_benchmark.ipynb):
+
+| Model | Device | Test | Baseline (tok/s) | Swizzle Runtime (tok/s) | Delta / Speedup | Swizzle Latency & Telemetry |
+| :--- | :--- | :--- | ---: | ---: | ---: | :--- |
+| `Qwen2.5-7B-Instruct-Q4_K_M` | NVIDIA L4 (24 GB) | `pp512` | 3507.28 | 3357.43 | 0.96x | TTFT 152.50 ms |
+| `Qwen2.5-7B-Instruct-Q4_K_M` | NVIDIA L4 (24 GB) | `tg128` | 53.80 | 53.63 | 1.00x | ITL p50 18.59 ms / p95 19.40 ms / p99 19.80 ms |
+| `Qwen2.5-7B-Instruct-Q4_K_M` | NVIDIA L4 (24 GB) | `edit256` | 53.80 | **270.96** | **+403.6% (5.04x)** | `edit_identical: yes` (bit-exact parity) |
+
+### Workstation & Edge Benchmarks (RTX 3050 Laptop + Ryzen 7)
+
 Measured back-to-back on an **AMD Ryzen 7 170** (16 logical / 8 physical cores) + **NVIDIA GeForce RTX 3050 Laptop GPU** (4 GB VRAM, `sm_86`, CUDA 12.8, driver 591.84) via `scripts/bench_compare_engines.py --repetitions 5 --cooldown-secs 5` (all runs verified `edit_identical: true` and 4/4 greedy `/v1/completions` output parity; peak GPU temp `56°C`):
 
 | Model | Device | Test | Baseline (tok/s) | Swizzle Runtime (tok/s) | Delta | Swizzle Latency |
@@ -168,6 +180,7 @@ swizzle-rt bench path/to/model.gguf --device cuda --json
 
 | Contributor | Hardware | Model | Test | Tok/s | Latency |
 | --- | --- | --- | --- | ---: | --- |
+| `@Paramveersingh-S` | NVIDIA L4 (24 GB, `sm_89`) | `Qwen2.5-7B-Instruct-Q4_K_M` | `edit256` / `tg128` | 270.96 / 53.63 | ITL p50 18.59 ms / TTFT 152.50 ms |
 | `@Paramveersingh-S` | RTX 3050 Laptop (4 GB, `sm_86`) | `Qwen3-0.6B-Q8_0` | `tg128` / `pp512` | 209.70 / 11804.23 | ITL p50 4.84 ms / TTFT 43.37 ms |
 | `@Paramveersingh-S` | AMD Ryzen 7 170 (8C/16T AVX2) | `Qwen3-0.6B-Q8_0` | `edit256` | 90.61 | `edit_identical: yes` |
 | *Your handle here* | *Submit via Issue #5* | — | — | — | — |
