@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-VERSION="${SWIZZLE_VERSION:-v0.1.0}"
+VERSION="${SWIZZLE_VERSION:-v0.2.0}"
 REPO="Swizzle-AI/swizzle-runtime"
 INSTALL_DIR="${SWIZZLE_INSTALL_DIR:-$HOME/.local/bin}"
 

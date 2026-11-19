@@ -23,6 +23,9 @@ dynamic = ["version"]
 Homepage = "https://github.com/Swizzle-AI"
 Source = "https://github.com/Swizzle-AI/swizzle-runtime"
 
+[project.scripts]
+swizzle-py = "swizzle.cli:main"
+
 [tool.maturin]
 module-name = "swizzle._swizzle"
 python-source = "python"

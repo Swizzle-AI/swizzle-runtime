@@ -46,8 +46,14 @@ const TARGETS: &[Target] = &[
     },
 ];
 
-/// Quantizes `input` to `output` as `kind`, one of [`TARGETS`].
+/// Quantizes `input` (a `.gguf` or `.safetensors` file) to `output` as `kind`, one of [`TARGETS`].
 pub fn run(input: &Path, output: &Path, kind: &str) -> Result<()> {
+    if input
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("safetensors"))
+    {
+        return crate::safetensors::convert_to_gguf(input, output, kind);
+    }
     let target = TARGETS
         .iter()
         .find(|t| t.name.eq_ignore_ascii_case(kind))

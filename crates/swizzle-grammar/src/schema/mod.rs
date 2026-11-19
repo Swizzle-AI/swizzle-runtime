@@ -76,6 +76,8 @@ const ANNOTATIONS: &[&str] = &[
     "writeOnly",
     "contentEncoding",
     "contentMediaType",
+    "strict",
+    "name",
 ];
 
 const KEYWORDS: &[&str] = &[
@@ -86,6 +88,7 @@ const KEYWORDS: &[&str] = &[
     "anyOf",
     "oneOf",
     "allOf",
+    "nullable",
     "properties",
     "required",
     "additionalProperties",
@@ -192,7 +195,7 @@ impl<'s> Converter<'s> {
             return Ok(group(alts));
         }
 
-        let types: Vec<&str> = match map.get("type") {
+        let mut types: Vec<&str> = match map.get("type") {
             None => vec![infer_type(map)],
             Some(Value::String(t)) => vec![t],
             Some(Value::Array(ts)) => ts
@@ -204,6 +207,11 @@ impl<'s> Converter<'s> {
                 .collect::<Result<_, _>>()?,
             Some(t) => return Err(Error::Schema(format!("type {t} is not a string"))),
         };
+        if map.get("nullable").and_then(Value::as_bool) == Some(true)
+            && !types.contains(&"null")
+        {
+            types.push("null");
+        }
         let alts = types
             .into_iter()
             .map(|t| self.typed(map, t, name))

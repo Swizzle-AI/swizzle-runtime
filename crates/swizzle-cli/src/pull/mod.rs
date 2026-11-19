@@ -38,7 +38,19 @@ pub fn run(p: &Pull) -> Result<PathBuf> {
         (None, None) => auto_quant(&listed),
         _ => quant,
     };
-    let files = select::pick(&listed, quant, p.file, p.projector)?;
+    let st_files: Vec<RepoFile> = listed
+        .iter()
+        .filter(|f| {
+            f.path.to_ascii_lowercase().ends_with(".safetensors")
+                || f.path.eq_ignore_ascii_case("config.json")
+        })
+        .cloned()
+        .collect();
+    let (files, convert_st) = match select::pick(&listed, quant, p.file, p.projector) {
+        Ok(f) => (f, false),
+        Err(_) if !st_files.is_empty() => (st_files, true),
+        Err(e) => return Err(e.into()),
+    };
 
     let have = |f: &RepoFile| -> u64 {
         let size = |p: &Path| std::fs::metadata(p).map_or(0, |m| m.len());
@@ -102,7 +114,24 @@ pub fn run(p: &Pull) -> Result<PathBuf> {
         std::fs::rename(&part, &target)?;
     }
 
-    let first = target(&dest, &files[0].path);
+    let first = if convert_st {
+        let st_file = files
+            .iter()
+            .find(|f| f.path.to_ascii_lowercase().ends_with(".safetensors"))
+            .ok_or("repository had no .safetensors file")?;
+        let st_path = target(&dest, &st_file.path);
+        let q_label = quant.unwrap_or("Q4_K_M");
+        let gguf_out = st_path.with_extension(format!("{q_label}.gguf"));
+        eprintln!(
+            "Auto-converting {} -> {} ({q_label})...",
+            st_path.display(),
+            gguf_out.display()
+        );
+        crate::safetensors::convert_to_gguf(&st_path, &gguf_out, q_label)?;
+        gguf_out
+    } else {
+        target(&dest, &files[0].path)
+    };
     let canonical = first.canonicalize()?;
     let name = library::discover()
         .into_iter()

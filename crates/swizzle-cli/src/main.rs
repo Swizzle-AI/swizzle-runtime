@@ -11,6 +11,7 @@ mod fit;
 mod fix;
 mod generate;
 mod gpu;
+mod ide;
 mod info;
 mod library;
 mod llama_flags;
@@ -21,6 +22,7 @@ mod pull;
 mod quantize;
 mod receipt;
 mod render;
+mod safetensors;
 mod sampler_args;
 mod sampling_command;
 mod start;
@@ -245,18 +247,49 @@ enum Command {
         #[arg(short = 't', long, value_name = "N")]
         threads: Option<usize>,
     },
-    /// Write a GGUF model in another type, as llama-quantize does
+    /// Write a GGUF or Safetensors model in another type, as llama-quantize does
     Quantize {
-        /// The model to read, with F32, F16, BF16 or Q8_0 weights
+        /// The .gguf or .safetensors model to read, with F32, F16, BF16 or Q8_0 weights
         input: PathBuf,
         /// The GGUF file to write
         output: PathBuf,
-        /// Q8_0, Q6_K, Q5_K_M, Q4_K_M or Q4_0
+        /// Q8_0, Q6_K, Q5_K_M, Q4_K_M, Q4_0 or F16
         #[arg(value_name = "TYPE")]
         kind: String,
         /// CPU threads [default: all]
         #[arg(short = 't', long, value_name = "N")]
         threads: Option<usize>,
+    },
+    /// Convert a Hugging Face .safetensors checkpoint directly into a quantized .gguf file
+    ConvertSafetensors {
+        /// The .safetensors file to convert
+        input: PathBuf,
+        /// The .gguf file to write
+        output: PathBuf,
+        /// Target quantization [default: Q4_K_M]
+        #[arg(short = 'q', long, default_value = "Q4_K_M")]
+        quant: String,
+        /// CPU threads [default: all]
+        #[arg(short = 't', long, value_name = "N")]
+        threads: Option<usize>,
+    },
+    /// Generate zero-config IDE Fast-Apply presets (Continue.dev, Aider, Zed, Cursor, Cline)
+    IdeConfig {
+        /// Target IDE or coding agent
+        #[arg(long, value_enum, default_value_t = ide::Ide::Continue, ignore_case = true)]
+        ide: ide::Ide,
+        /// Model name reported by `swizzle-rt serve`
+        #[arg(short = 'm', long, default_value = "Qwen2.5-7B-Instruct-Q4_K_M.gguf")]
+        model: String,
+        /// Host where `swizzle-rt serve` is listening
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+        /// Port where `swizzle-rt serve` is listening
+        #[arg(long, default_value_t = 8080)]
+        port: u16,
+        /// Write the configuration to FILE (or the IDE's default path when omitted)
+        #[arg(long, value_name = "FILE", num_args = 0..=1, default_missing_value = "")]
+        write: Option<String>,
     },
 }
 
@@ -745,6 +778,31 @@ fn run(cli: Cli) -> Result<()> {
         } => {
             set_threads(threads)?;
             quantize::run(&input, &output, &kind)
+        }
+        Command::ConvertSafetensors {
+            input,
+            output,
+            quant,
+            threads,
+        } => {
+            set_threads(threads)?;
+            safetensors::convert_to_gguf(&input, &output, &quant)
+        }
+        Command::IdeConfig {
+            ide,
+            model,
+            host,
+            port,
+            write,
+        } => {
+            let out_path = write.map(|w| {
+                if w.is_empty() {
+                    ide::default_path(ide)
+                } else {
+                    PathBuf::from(w)
+                }
+            });
+            ide::run(ide, &model, &host, port, out_path.as_deref())
         }
     }
 }

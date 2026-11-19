@@ -215,6 +215,11 @@ fn string_formats() {
         &[r#""ab""#, r#""a\nb""#],
         &[r#""a""#, r#""abcd""#],
     );
+    check(
+        json!({"type": "string", "nullable": true, "strict": true}),
+        &[r#""hello""#, "null"],
+        &["123", "true"],
+    );
 }
 
 #[test]

@@ -214,11 +214,13 @@ fn route(engine: &Engine, head: &Head, body: &[u8], out: &mut impl Write) -> Res
         }
         "/chat/completions" => {
             expect(head, "POST")?;
-            chat(engine, parse(head, body)?, out)
+            let trace = TraceContext::from_head(head);
+            chat(engine, parse(head, body)?, &trace, out)
         }
         "/completions" => {
             expect(head, "POST")?;
-            completion(engine, parse(head, body)?, out)
+            let trace = TraceContext::from_head(head);
+            completion(engine, parse(head, body)?, &trace, out)
         }
         "/prefill" => {
             expect(head, "POST")?;
@@ -280,7 +282,72 @@ pub(crate) fn parse<T: DeserializeOwned>(head: &Head, body: &[u8]) -> Result<T, 
     serde_json::from_slice(body).map_err(|e| ApiError::invalid(format!("invalid JSON: {e}")))
 }
 
-fn chat(engine: &Engine, req: ChatRequest, out: &mut impl Write) -> Result<(), ApiError> {
+/// W3C Distributed Trace Context (`traceparent`) and enterprise audit request IDs.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TraceContext {
+    pub traceparent: Option<String>,
+    pub trace_id: Option<String>,
+    pub request_id: Option<String>,
+}
+
+impl TraceContext {
+    pub fn from_head(head: &Head) -> Self {
+        let traceparent = head
+            .header("traceparent")
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned);
+        let trace_id = traceparent
+            .as_deref()
+            .and_then(parse_w3c_trace_id)
+            .or_else(|| {
+                head.header("x-trace-id")
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned)
+            });
+        let request_id = head
+            .header("x-request-id")
+            .or_else(|| head.header("x-correlation-id"))
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned);
+        TraceContext {
+            traceparent,
+            trace_id,
+            request_id,
+        }
+    }
+
+    pub fn append_headers(&self, headers: &mut Vec<(&'static str, String)>) {
+        if let Some(tp) = &self.traceparent {
+            headers.push(("traceparent", tp.clone()));
+        }
+        if let Some(tid) = &self.trace_id {
+            headers.push(("X-Swizzle-Trace-Id", tid.clone()));
+        }
+        if let Some(rid) = &self.request_id {
+            headers.push(("X-Request-Id", rid.clone()));
+        }
+    }
+}
+
+/// Extracts the 32-hex-character `trace-id` from W3C `00-<trace-id>-<parent-id>-<flags>`.
+fn parse_w3c_trace_id(tp: &str) -> Option<String> {
+    let mut parts = tp.split('-');
+    let _version = parts.next().filter(|v| v.len() == 2)?;
+    let trace_id = parts
+        .next()
+        .filter(|id| id.len() == 32 && id.bytes().all(|b| b.is_ascii_hexdigit()))?;
+    Some(trace_id.to_ascii_lowercase())
+}
+
+fn chat(
+    engine: &Engine,
+    req: ChatRequest,
+    trace: &TraceContext,
+    out: &mut impl Write,
+) -> Result<(), ApiError> {
     api::validate_messages(&req.messages)?;
     let mut request = req.common.request(engine.default_sampling())?;
     let log = req.common.logprobs()?.map(Logprobs::new);
@@ -325,8 +392,15 @@ fn chat(engine: &Engine, req: ChatRequest, out: &mut impl Write) -> Result<(), A
         if let Some(log) = &log {
             body["choices"][0]["logprobs"] = logprobs::chat(&log.range(0, usize::MAX), piece);
         }
-        let receipt_hash = add_receipt(&mut body, engine, &req.common, input(), &request, &c)?;
-        let mut headers = telemetry_headers(engine, &c, receipt_hash.as_deref());
+        let (receipt_hash, audit_token) =
+            add_receipt(&mut body, engine, &req.common, input(), &request, &c, trace)?;
+        let mut headers = telemetry_headers(
+            engine,
+            &c,
+            receipt_hash.as_deref(),
+            audit_token.as_deref(),
+            trace,
+        );
         if pred_tokens > 0 {
             headers.push(("X-Swizzle-Prediction-Seed-Tokens", pred_tokens.to_string()));
         }
@@ -339,6 +413,7 @@ fn chat(engine: &Engine, req: ChatRequest, out: &mut impl Write) -> Result<(), A
         None,
     );
     let mut sse_headers = vec![("X-Swizzle-Backend", engine.backend_name().to_owned())];
+    trace.append_headers(&mut sse_headers);
     if pred_tokens > 0 {
         sse_headers.push(("X-Swizzle-Prediction-Seed-Tokens", pred_tokens.to_string()));
     }
@@ -377,7 +452,7 @@ fn chat(engine: &Engine, req: ChatRequest, out: &mut impl Write) -> Result<(), A
         ));
     }
     let mut last = api::chat_chunk(&meta, Some(json!({})), Some(c.finish.as_str()));
-    add_receipt(&mut last, engine, &req.common, input(), &request, &c)?;
+    add_receipt(&mut last, engine, &req.common, input(), &request, &c, trace)?;
     events.send(&last);
     let usage = req.common.include_usage().then(|| {
         let mut chunk = api::chat_chunk(&meta, None, None);
@@ -407,6 +482,7 @@ fn prefill(engine: &Engine, req: ChatRequest, out: &mut impl Write) -> Result<()
 fn completion(
     engine: &Engine,
     req: CompletionRequest,
+    trace: &TraceContext,
     out: &mut impl Write,
 ) -> Result<(), ApiError> {
     let mut request = req.common.request(engine.default_sampling())?;
@@ -435,8 +511,15 @@ fn completion(
             let tokens = log.range(0, usize::MAX);
             body["choices"][0]["logprobs"] = logprobs::completion(&tokens, piece, &mut offset);
         }
-        let receipt_hash = add_receipt(&mut body, engine, &req.common, input(), &request, &c)?;
-        let mut headers = telemetry_headers(engine, &c, receipt_hash.as_deref());
+        let (receipt_hash, audit_token) =
+            add_receipt(&mut body, engine, &req.common, input(), &request, &c, trace)?;
+        let mut headers = telemetry_headers(
+            engine,
+            &c,
+            receipt_hash.as_deref(),
+            audit_token.as_deref(),
+            trace,
+        );
         if pred_tokens > 0 {
             headers.push(("X-Swizzle-Prediction-Seed-Tokens", pred_tokens.to_string()));
         }
@@ -444,6 +527,7 @@ fn completion(
     }
 
     let mut sse_headers = vec![("X-Swizzle-Backend", engine.backend_name().to_owned())];
+    trace.append_headers(&mut sse_headers);
     if pred_tokens > 0 {
         sse_headers.push(("X-Swizzle-Prediction-Seed-Tokens", pred_tokens.to_string()));
     }
@@ -467,7 +551,7 @@ fn completion(
         )
         .map_err(invalid)?;
     let mut last = api::completion_chunk(&meta, Some(""), Some(c.finish.as_str()));
-    add_receipt(&mut last, engine, &req.common, input(), &request, &c)?;
+    add_receipt(&mut last, engine, &req.common, input(), &request, &c, trace)?;
     events.send(&last);
     let usage = req.common.include_usage().then(|| {
         let mut chunk = api::completion_chunk(&meta, None, None);
@@ -499,7 +583,8 @@ fn prepare_receipt(
     Ok(())
 }
 
-/// Adds the receipt for `c` to `body` if the request asked for one, returning its hex BLAKE3 digest.
+/// Adds the receipt for `c` to `body` if the request asked for one, returning
+/// `(receipt_blake3_hex, trace_bound_audit_blake3_hex)`.
 fn add_receipt(
     body: &mut Value,
     engine: &Engine,
@@ -507,9 +592,10 @@ fn add_receipt(
     input: Value,
     request: &Request,
     c: &Completion,
-) -> Result<Option<String>, ApiError> {
+    trace: &TraceContext,
+) -> Result<(Option<String>, Option<String>), ApiError> {
     let Some(receipts) = engine.receipts().filter(|_| common.receipt()) else {
-        return Ok(None);
+        return Ok((None, None));
     };
     let r = receipts
         .make(input, common.constraint(), request, c)
@@ -520,14 +606,27 @@ fn add_receipt(
     // through text, so f32 settings read 0.8 rather than 0.800000011920929
     let text = serde_json::to_string(&r).expect("a receipt serializes");
     let hash = blake3::hash(text.as_bytes()).to_hex().to_string();
+    let audit = trace
+        .trace_id
+        .as_deref()
+        .or(trace.request_id.as_deref())
+        .map(|tid| {
+            let mut h = blake3::Hasher::new();
+            h.update(tid.as_bytes());
+            h.update(b":");
+            h.update(hash.as_bytes());
+            h.finalize().to_hex().to_string()
+        });
     body["receipt"] = serde_json::from_str(&text).expect("a receipt parses");
-    Ok(Some(hash))
+    Ok((Some(hash), audit))
 }
 
 fn telemetry_headers(
     engine: &Engine,
     c: &Completion,
     receipt_hash: Option<&str>,
+    audit_token: Option<&str>,
+    trace: &TraceContext,
 ) -> Vec<(&'static str, String)> {
     let ttft_ms = c.timings.prefill.as_secs_f64() * 1000.0;
     let decode_secs = c.timings.decode.as_secs_f64();
@@ -545,6 +644,10 @@ fn telemetry_headers(
     if let Some(hash) = receipt_hash {
         headers.push(("X-Swizzle-Receipt-Hash", hash.to_owned()));
     }
+    if let Some(audit) = audit_token {
+        headers.push(("X-Swizzle-Audit-Token", audit.to_owned()));
+    }
+    trace.append_headers(&mut headers);
     headers
 }
 
@@ -752,5 +855,26 @@ mod tests {
         assert_eq!(entry["owned_by"], "swizzle-runtime");
         assert_eq!(entry["context_length"], 32768);
         assert!(entry["created"].as_u64().is_some());
+    }
+
+    #[test]
+    fn parses_w3c_traceparent_and_appends_audit_headers() {
+        let h = head(
+            "POST /v1/chat/completions HTTP/1.1\r\ntraceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01\r\nX-Request-Id: req-99",
+        );
+        let trace = TraceContext::from_head(&h);
+        assert_eq!(
+            trace.trace_id.as_deref(),
+            Some("4bf92f3577b34da6a3ce929d0e0e4736")
+        );
+        assert_eq!(trace.request_id.as_deref(), Some("req-99"));
+        let mut headers = Vec::new();
+        trace.append_headers(&mut headers);
+        assert!(headers
+            .iter()
+            .any(|(k, v)| *k == "X-Swizzle-Trace-Id" && v == "4bf92f3577b34da6a3ce929d0e0e4736"));
+        assert!(headers
+            .iter()
+            .any(|(k, v)| *k == "X-Request-Id" && v == "req-99"));
     }
 }

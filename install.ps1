@@ -1,5 +1,5 @@
 param(
-    [string]$Version = $(if ($env:SWIZZLE_VERSION) { $env:SWIZZLE_VERSION } else { "v0.1.0" }),
+    [string]$Version = $(if ($env:SWIZZLE_VERSION) { $env:SWIZZLE_VERSION } else { "v0.2.0" }),
     [string]$InstallDir = $(if ($env:SWIZZLE_INSTALL_DIR) { $env:SWIZZLE_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Swizzle\bin" })
 )
 

@@ -116,6 +116,13 @@ swizzle-rt chat path/to/model.gguf
 # Serve OpenAI (/v1/*), llama-server (/completion, /props), and Ollama (/api/*) APIs
 swizzle-rt serve path/to/model.gguf --port 8080
 
+# Generate zero-config IDE Fast-Apply presets (Continue.dev, Aider, Zed, Cursor, Cline)
+swizzle-rt ide-config --ide continue --model Qwen2.5-7B-Instruct-Q4_K_M.gguf --write
+swizzle-rt ide-config --ide aider --model Qwen2.5-7B-Instruct-Q4_K_M.gguf --write
+
+# Convert a Hugging Face .safetensors checkpoint directly into a quantized .gguf file
+swizzle-rt convert-safetensors path/to/model.safetensors path/to/model-q4_k_m.gguf --quant Q4_K_M
+
 # Built-in hardware micro-benchmarks & prefill/decode telemetry
 swizzle-rt bench path/to/model.gguf --device cuda
 ```
@@ -128,6 +135,8 @@ swizzle-rt bench path/to/model.gguf --device cuda
 
 - **OpenAI API**: `/v1/chat/completions`, `/v1/completions`, `/v1/models`, `/v1/embeddings`, `/v1/rerank`, `/health`, `/health/live`, `/health/ready`
   - **OpenAI Predicted Outputs (`prediction` / Fast-Apply 5.04x Code Edits)**: Pass `"prediction": {"type": "content", "content": "<existing file>"}` on `/v1/chat/completions` or `/v1/completions` to zero-cost seed the `RAD-1` 262k-token suffix-automaton session drafter (`X-Swizzle-Prediction-Seed-Tokens` header & `swizzle:prediction_seed_tokens_total` metric).
+  - **Deterministic Structured Outputs (`response_format` JSON Schema & `tools`)**: Compiled byte-trie DFA grammar masking (`response_format: {"type": "json_schema", ...}`, `nullable`, `strict`, `email`/`uri`/`ipv4`/`uuid`/`date-time`, and `tool_choice: "required"`) with full `RAD-1` speculative tree verification (`score_tree`).
+  - **W3C Distributed Tracing (`traceparent`) & Cryptographic Audit Binding**: Propagates incoming `traceparent`, `X-Trace-Id`, and `X-Request-Id` headers and binds cryptographic inference receipts (`receipt: true`) to the trace ID in `X-Swizzle-Audit-Token = BLAKE3(trace_id || ":" || receipt_blake3)`.
 - **Enterprise Observability & Kubernetes Probes**: Prometheus `/metrics` exposing both `swizzle:*` and `llamacpp:*` namespaces (`swizzle:requests_total`, `swizzle:prediction_seed_tokens_total`, `swizzle:predicted_tokens_seconds`) plus unauthenticated `/health/live` and `/health/ready` probes ([`deploy/k8s/swizzle-enterprise.yaml`](deploy/k8s/swizzle-enterprise.yaml)).
 - **llama.cpp `llama-server` API**: `/completion`, `/tokenize`, `/detokenize`, `/props`, `/slots`
 - **Ollama API**: `/api/chat`, `/api/generate`, `/api/tags`, `/api/ps`, `/api/show`, `/api/version`

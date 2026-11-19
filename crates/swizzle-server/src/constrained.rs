@@ -66,6 +66,16 @@ impl<M: Target> Policy<M> for Constrained<'_> {
         model.logits(state, tokens, all_rows)
     }
 
+    fn score_tree(
+        &self,
+        model: &M,
+        state: &mut M::State,
+        tokens: &[u32],
+        parents: &[Option<usize>],
+    ) -> Option<(Vec<f32>, Vec<f32>)> {
+        model.logits_tree(state, tokens, parents)
+    }
+
     fn choose(&mut self, model: &M, scores: &Vec<f32>, row: usize, history: &[u32]) -> u32 {
         self.sync(&history[self.start.min(history.len())..]);
         self.matcher.allowed(&mut self.allowed);

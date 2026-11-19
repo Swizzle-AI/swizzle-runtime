@@ -395,9 +395,12 @@ impl Common {
             Some("text") => Ok(None),
             Some("json_object") => Ok(Some(Arc::new(Grammar::any_json()))),
             Some("json_schema") => {
-                let schema = format.pointer("/json_schema/schema").ok_or_else(|| {
-                    ApiError::invalid("response_format.json_schema.schema is missing")
-                })?;
+                let schema = format
+                    .pointer("/json_schema/schema")
+                    .or_else(|| format.get("schema"))
+                    .ok_or_else(|| {
+                        ApiError::invalid("response_format.json_schema.schema is missing")
+                    })?;
                 Grammar::from_json_schema(schema)
                     .map(|g| Some(Arc::new(g)))
                     .map_err(invalid)
