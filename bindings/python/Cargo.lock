@@ -399,132 +399,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
-name = "swizzle"
-version = "0.1.0"
-dependencies = [
- "swizzle-gguf",
- "swizzle-ktc",
- "swizzle-models",
- "swizzle-server",
- "swizzle-tokenizer",
- "serde_json",
-]
-
-[[package]]
-name = "swizzle-cpu"
-version = "0.1.0"
-dependencies = [
- "half",
- "swizzle-quant",
- "rayon",
-]
-
-[[package]]
-name = "swizzle-cuda"
-version = "0.1.0"
-dependencies = [
- "half",
- "swizzle-quant",
- "libloading",
-]
-
-[[package]]
-name = "swizzle-gguf"
-version = "0.1.0"
-dependencies = [
- "swizzle-quant",
- "memmap2",
- "windows-sys",
-]
-
-[[package]]
-name = "swizzle-grammar"
-version = "0.1.0"
-dependencies = [
- "swizzle-tokenizer",
- "serde_json",
-]
-
-[[package]]
-name = "swizzle-ktc"
-version = "0.1.0"
-dependencies = [
- "blake3",
- "ed25519-dalek",
- "swizzle-gguf",
- "memmap2",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "swizzle-models"
-version = "0.1.0"
-dependencies = [
- "half",
- "swizzle-cpu",
- "swizzle-cuda",
- "swizzle-gguf",
- "swizzle-quant",
- "rayon",
-]
-
-[[package]]
-name = "swizzle-python"
-version = "0.1.0"
-dependencies = [
- "swizzle",
- "pyo3",
-]
-
-[[package]]
-name = "swizzle-quant"
-version = "0.1.0"
-dependencies = [
- "half",
-]
-
-[[package]]
-name = "swizzle-server"
-version = "0.1.0"
-dependencies = [
- "blake3",
- "swizzle-cuda",
- "swizzle-gguf",
- "swizzle-grammar",
- "swizzle-ktc",
- "swizzle-models",
- "swizzle-tokenizer",
- "swizzle-vision",
- "minijinja",
- "minijinja-contrib",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "swizzle-tokenizer"
-version = "0.1.0"
-dependencies = [
- "swizzle-gguf",
- "unicode-general-category",
- "unicode-normalization",
-]
-
-[[package]]
-name = "swizzle-vision"
-version = "0.1.0"
-dependencies = [
- "half",
- "image",
- "swizzle-cpu",
- "swizzle-cuda",
- "swizzle-gguf",
- "swizzle-quant",
- "rayon",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -953,6 +827,132 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+
+[[package]]
+name = "swizzle"
+version = "0.2.0"
+dependencies = [
+ "serde_json",
+ "swizzle-gguf",
+ "swizzle-ktc",
+ "swizzle-models",
+ "swizzle-server",
+ "swizzle-tokenizer",
+]
+
+[[package]]
+name = "swizzle-cpu"
+version = "0.2.0"
+dependencies = [
+ "half",
+ "rayon",
+ "swizzle-quant",
+]
+
+[[package]]
+name = "swizzle-cuda"
+version = "0.2.0"
+dependencies = [
+ "half",
+ "libloading",
+ "swizzle-quant",
+]
+
+[[package]]
+name = "swizzle-gguf"
+version = "0.2.0"
+dependencies = [
+ "memmap2",
+ "swizzle-quant",
+ "windows-sys",
+]
+
+[[package]]
+name = "swizzle-grammar"
+version = "0.2.0"
+dependencies = [
+ "serde_json",
+ "swizzle-tokenizer",
+]
+
+[[package]]
+name = "swizzle-ktc"
+version = "0.2.0"
+dependencies = [
+ "blake3",
+ "ed25519-dalek",
+ "memmap2",
+ "serde",
+ "serde_json",
+ "swizzle-gguf",
+]
+
+[[package]]
+name = "swizzle-models"
+version = "0.2.0"
+dependencies = [
+ "half",
+ "rayon",
+ "swizzle-cpu",
+ "swizzle-cuda",
+ "swizzle-gguf",
+ "swizzle-quant",
+]
+
+[[package]]
+name = "swizzle-python"
+version = "0.2.0"
+dependencies = [
+ "pyo3",
+ "swizzle",
+]
+
+[[package]]
+name = "swizzle-quant"
+version = "0.2.0"
+dependencies = [
+ "half",
+]
+
+[[package]]
+name = "swizzle-server"
+version = "0.2.0"
+dependencies = [
+ "blake3",
+ "minijinja",
+ "minijinja-contrib",
+ "serde",
+ "serde_json",
+ "swizzle-cuda",
+ "swizzle-gguf",
+ "swizzle-grammar",
+ "swizzle-ktc",
+ "swizzle-models",
+ "swizzle-tokenizer",
+ "swizzle-vision",
+]
+
+[[package]]
+name = "swizzle-tokenizer"
+version = "0.2.0"
+dependencies = [
+ "swizzle-gguf",
+ "unicode-general-category",
+ "unicode-normalization",
+]
+
+[[package]]
+name = "swizzle-vision"
+version = "0.2.0"
+dependencies = [
+ "half",
+ "image",
+ "rayon",
+ "swizzle-cpu",
+ "swizzle-cuda",
+ "swizzle-gguf",
+ "swizzle-quant",
+]
 
 [[package]]
 name = "syn"
