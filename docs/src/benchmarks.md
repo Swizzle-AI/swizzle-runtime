@@ -52,6 +52,10 @@ python3 scripts/bench_vs_llamacpp.py model.gguf --llama-dir path/to/llama.cpp/bi
 
 ### Datacenter GPU: NVIDIA L4 (24 GB Ada Lovelace, `sm_89`)
 
+<p align="center">
+  <img src="../../assets/swizzle_l4_datacenter_benchmark.png" alt="Swizzle Runtime vs llama.cpp NVIDIA L4 Datacenter Benchmark" width="100%" />
+</p>
+
 Measured on Google Colab Pro on an **NVIDIA L4 Tensor Core GPU** (24 GB VRAM, `sm_89`, CUDA 13.0, driver 580.82.07) back-to-back against `llama.cpp` (`llama-bench -ngl 99`) running **`Qwen2.5-7B-Instruct-Q4_K_M.gguf`** (4.68 GiB, 7.62B parameters). Reproducible with one click via [`benchmarks/colab/swizzle_datacenter_benchmark.ipynb`](../../benchmarks/colab/swizzle_datacenter_benchmark.ipynb):
 
 | Model | Size | Device | Test | Baseline (t/s) | Swizzle Runtime (t/s) | Delta | Swizzle TTFT / ITL (ms) | Edit Exact |

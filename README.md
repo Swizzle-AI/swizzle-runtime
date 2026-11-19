@@ -138,7 +138,11 @@ swizzle-rt bench path/to/model.gguf --device cuda
 ## Verified Benchmarks
 
 <p align="center">
-  <img src="assets/swizzle_benchmark_comparison.png" alt="Swizzle Runtime vs llama.cpp Benchmark Comparison" width="100%" />
+  <img src="assets/swizzle_l4_datacenter_benchmark.png" alt="Swizzle Runtime vs llama.cpp NVIDIA L4 Datacenter Benchmark" width="100%" />
+</p>
+
+<p align="center">
+  <img src="assets/swizzle_benchmark_comparison.png" alt="Swizzle Runtime vs llama.cpp Workstation & Edge Benchmark Comparison" width="100%" />
 </p>
 
 ### Enterprise Datacenter Benchmark (NVIDIA L4 24GB Ada Lovelace)
