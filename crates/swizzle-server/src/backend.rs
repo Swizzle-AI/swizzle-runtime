@@ -88,6 +88,10 @@ pub trait Backend: Send {
         0
     }
 
+    /// Feeds predicted output tokens (OpenAI `prediction` / Fast-Apply reference
+    /// content) into the backend's speculative session drafter (`RAD-1`).
+    fn observe_prediction(&mut self, _tokens: &[u32]) {}
+
     /// Short lowercase identifier for the execution backend (`"cpu"`, `"cuda"`, `"vulkan"`).
     fn backend_name(&self) -> &'static str {
         "cpu"

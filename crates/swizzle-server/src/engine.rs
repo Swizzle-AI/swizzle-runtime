@@ -293,6 +293,24 @@ impl<'a> Engine<'a> {
         })
     }
 
+    /// Seeds predicted reference text (OpenAI `prediction` / Fast-Apply original
+    /// file content) into the backend's `RAD-1` suffix-automaton session drafter
+    /// without running a model forward pass. Returns the number of tokens seeded.
+    pub fn seed_prediction(&self, text: &str) -> usize {
+        if text.is_empty() {
+            return 0;
+        }
+        let ids = self.tokenizer.encode(text, false);
+        if ids.is_empty() {
+            return 0;
+        }
+        self.on_backend(&ids, |_, backend| {
+            backend.observe_prediction(&ids);
+        });
+        self.stats.record_prediction_seed(ids.len());
+        ids.len()
+    }
+
     fn lock_free(&self) -> MutexGuard<'_, Vec<(usize, Box<dyn Backend + 'a>)>> {
         self.free.lock().unwrap_or_else(PoisonError::into_inner)
     }

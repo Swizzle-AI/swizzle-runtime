@@ -14,6 +14,7 @@ pub struct Stats {
     requests: AtomicU64,
     prompt_tokens: AtomicU64,
     cached_tokens: AtomicU64,
+    prediction_seed_tokens: AtomicU64,
     prompt_us: AtomicU64,
     generated: AtomicU64,
     decode_us: AtomicU64,
@@ -108,7 +109,13 @@ impl Stats {
             .clone()
     }
 
-    /// The totals in Prometheus' text format, under llama-server's names.
+    /// Records tokens seeded into the `RAD-1` session drafter via OpenAI `prediction`.
+    pub fn record_prediction_seed(&self, tokens: usize) {
+        self.prediction_seed_tokens
+            .fetch_add(tokens as u64, Ordering::Relaxed);
+    }
+
+    /// The totals in Prometheus' text format, under llama-server's names and `swizzle:*` aliases.
     pub fn prometheus(&self, load: &Load) -> String {
         let get = |a: &AtomicU64| a.load(Ordering::Relaxed);
         let secs = |a: &AtomicU64| get(a) as f64 / 1e6;
@@ -152,6 +159,11 @@ impl Stats {
                 "Largest observed sequence length (prompt + generation)",
                 get(&self.longest) as f64,
             ),
+            (
+                "prediction_seed_tokens_total",
+                "Number of predicted output reference tokens seeded into RAD-1",
+                get(&self.prediction_seed_tokens) as f64,
+            ),
         ];
         let gauges = [
             (
@@ -176,11 +188,13 @@ impl Stats {
             ),
         ];
         let mut out = String::new();
-        for (kind, items) in [("counter", &counters[..]), ("gauge", &gauges[..])] {
-            for (name, help, value) in items {
-                let _ = writeln!(out, "# HELP llamacpp:{name} {help}");
-                let _ = writeln!(out, "# TYPE llamacpp:{name} {kind}");
-                let _ = writeln!(out, "llamacpp:{name} {value}");
+        for prefix in ["llamacpp", "swizzle"] {
+            for (kind, items) in [("counter", &counters[..]), ("gauge", &gauges[..])] {
+                for (name, help, value) in items {
+                    let _ = writeln!(out, "# HELP {prefix}:{name} {help}");
+                    let _ = writeln!(out, "# TYPE {prefix}:{name} {kind}");
+                    let _ = writeln!(out, "{prefix}:{name} {value}");
+                }
             }
         }
         out
@@ -212,6 +226,7 @@ mod tests {
                 decode: Duration::from_secs(1),
             },
         );
+        stats.record_prediction_seed(42);
         let text = stats.prometheus(&Load {
             processing: 0,
             deferred: 3,
@@ -226,7 +241,10 @@ mod tests {
             "llamacpp:predicted_tokens_seconds 50\n",
             "llamacpp:n_tokens_max 170\n",
             "llamacpp:requests_deferred 3\n",
+            "swizzle:requests_total 1\n",
+            "swizzle:prediction_seed_tokens_total 42\n",
             "# TYPE llamacpp:requests_processing gauge\n",
+            "# TYPE swizzle:requests_processing gauge\n",
         ] {
             assert!(text.contains(line), "{line:?} not in\n{text}");
         }

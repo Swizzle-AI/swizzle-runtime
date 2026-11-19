@@ -50,6 +50,11 @@ impl<D> Ensemble<D> {
     pub fn scores(&self) -> Vec<f32> {
         self.sources.iter().map(|s| s.score).collect()
     }
+
+    /// Mutable access to each underlying drafter source, in order.
+    pub fn sources_mut(&mut self) -> impl Iterator<Item = &mut D> {
+        self.sources.iter_mut().map(|s| &mut s.drafter)
+    }
 }
 
 impl<M: Target, D: Drafter<M>> Drafter<M> for Ensemble<D> {

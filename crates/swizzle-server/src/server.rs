@@ -139,7 +139,10 @@ fn handle(options: &Options, routes: &Routes, stream: &TcpStream) {
 /// Checks the request's key, as llama-server reads it: a bearer token or
 /// an `X-Api-Key` header. Health checks need none.
 fn authorize(head: &Head, key: &str) -> Result<(), ApiError> {
-    if matches!(head.path.as_str(), "/health" | "/v1/health") {
+    if matches!(
+        head.path.as_str(),
+        "/health" | "/health/live" | "/health/ready" | "/v1/health" | "/v1/health/live" | "/v1/health/ready"
+    ) {
         return Ok(());
     }
     let given = head
@@ -180,12 +183,18 @@ fn route(engine: &Engine, head: &Head, body: &[u8], out: &mut impl Write) -> Res
         return answer;
     }
     match head.path.strip_prefix("/v1").unwrap_or(&head.path) {
-        "/health" => {
+        "/health" | "/health/live" | "/health/ready" => {
             expect(head, "GET")?;
             let (slots, busy) = engine.slots();
             send_json(
                 out,
-                &json!({"status": "ok", "slots_idle": slots - busy, "slots_processing": busy}),
+                &json!({
+                    "status": "ok",
+                    "backend": engine.backend_name(),
+                    "model": engine.name(),
+                    "slots_idle": slots - busy,
+                    "slots_processing": busy
+                }),
             )
         }
         "/metrics" => {
@@ -296,6 +305,10 @@ fn chat(engine: &Engine, req: ChatRequest, out: &mut impl Write) -> Result<(), A
         request.grammar = Some(std::sync::Arc::new(grammar));
     }
     prepare_receipt(engine, &req.common, &mut request, &prompt)?;
+    let pred_tokens = match req.common.prediction_text()? {
+        Some(pred) => engine.seed_prediction(&pred),
+        None => 0,
+    };
     let input = || Value::from(req.messages.clone());
     let id = new_id("chatcmpl");
     let meta = Meta {
@@ -313,7 +326,10 @@ fn chat(engine: &Engine, req: ChatRequest, out: &mut impl Write) -> Result<(), A
             body["choices"][0]["logprobs"] = logprobs::chat(&log.range(0, usize::MAX), piece);
         }
         let receipt_hash = add_receipt(&mut body, engine, &req.common, input(), &request, &c)?;
-        let headers = telemetry_headers(engine, &c, receipt_hash.as_deref());
+        let mut headers = telemetry_headers(engine, &c, receipt_hash.as_deref());
+        if pred_tokens > 0 {
+            headers.push(("X-Swizzle-Prediction-Seed-Tokens", pred_tokens.to_string()));
+        }
         return send_json_with_headers(out, &body, &headers);
     }
 
@@ -322,11 +338,11 @@ fn chat(engine: &Engine, req: ChatRequest, out: &mut impl Write) -> Result<(), A
         Some(json!({"role": "assistant", "content": ""})),
         None,
     );
-    let mut events = Events::with_headers(
-        out,
-        Some(first),
-        vec![("X-Swizzle-Backend", engine.backend_name().to_owned())],
-    );
+    let mut sse_headers = vec![("X-Swizzle-Backend", engine.backend_name().to_owned())];
+    if pred_tokens > 0 {
+        sse_headers.push(("X-Swizzle-Prediction-Seed-Tokens", pred_tokens.to_string()));
+    }
+    let mut events = Events::with_headers(out, Some(first), sse_headers);
     let mut sent = 0;
     let c = engine
         .complete_with_logprobs(&prompt, &request, log.as_ref(), &mut |part, generated| {
@@ -399,6 +415,10 @@ fn completion(
     let mut offset = 0;
     let prompt = Prompt::raw(api::completion_prompt(&req.prompt)?);
     prepare_receipt(engine, &req.common, &mut request, &prompt)?;
+    let pred_tokens = match req.common.prediction_text()? {
+        Some(pred) => engine.seed_prediction(&pred),
+        None => 0,
+    };
     let input = || Value::from(prompt.text.as_str());
     let id = new_id("cmpl");
     let meta = Meta {
@@ -416,15 +436,18 @@ fn completion(
             body["choices"][0]["logprobs"] = logprobs::completion(&tokens, piece, &mut offset);
         }
         let receipt_hash = add_receipt(&mut body, engine, &req.common, input(), &request, &c)?;
-        let headers = telemetry_headers(engine, &c, receipt_hash.as_deref());
+        let mut headers = telemetry_headers(engine, &c, receipt_hash.as_deref());
+        if pred_tokens > 0 {
+            headers.push(("X-Swizzle-Prediction-Seed-Tokens", pred_tokens.to_string()));
+        }
         return send_json_with_headers(out, &body, &headers);
     }
 
-    let mut events = Events::with_headers(
-        out,
-        None,
-        vec![("X-Swizzle-Backend", engine.backend_name().to_owned())],
-    );
+    let mut sse_headers = vec![("X-Swizzle-Backend", engine.backend_name().to_owned())];
+    if pred_tokens > 0 {
+        sse_headers.push(("X-Swizzle-Prediction-Seed-Tokens", pred_tokens.to_string()));
+    }
+    let mut events = Events::with_headers(out, None, sse_headers);
     let mut sent = 0;
     let c = engine
         .complete_with_logprobs(
@@ -652,6 +675,10 @@ mod tests {
     fn api_key_guards_all_but_health() {
         let ok = |lines| authorize(&head(lines), "s3cret").is_ok();
         assert!(ok("GET /health HTTP/1.1"));
+        assert!(ok("GET /health/live HTTP/1.1"));
+        assert!(ok("GET /health/ready HTTP/1.1"));
+        assert!(ok("GET /v1/health/live HTTP/1.1"));
+        assert!(ok("GET /v1/health/ready HTTP/1.1"));
         assert!(ok(
             "GET /v1/models HTTP/1.1\r\nAuthorization: Bearer s3cret"
         ));

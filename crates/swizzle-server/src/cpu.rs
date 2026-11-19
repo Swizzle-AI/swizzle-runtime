@@ -353,4 +353,8 @@ impl Backend for CpuBackend<'_> {
         let _seat = self.model.seat();
         self.ahead_of(prompt)
     }
+
+    fn observe_prediction(&mut self, tokens: &[u32]) {
+        drafter::seed_prediction(&mut self.decoder, tokens);
+    }
 }

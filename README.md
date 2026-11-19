@@ -126,7 +126,9 @@ swizzle-rt bench path/to/model.gguf --device cuda
 
 `swizzle-rt serve` exposes a drop-in server compatible with:
 
-- **OpenAI API**: `/v1/chat/completions`, `/v1/completions`, `/v1/models`, `/v1/embeddings`, `/v1/rerank`, `/health`
+- **OpenAI API**: `/v1/chat/completions`, `/v1/completions`, `/v1/models`, `/v1/embeddings`, `/v1/rerank`, `/health`, `/health/live`, `/health/ready`
+  - **OpenAI Predicted Outputs (`prediction` / Fast-Apply 5.04x Code Edits)**: Pass `"prediction": {"type": "content", "content": "<existing file>"}` on `/v1/chat/completions` or `/v1/completions` to zero-cost seed the `RAD-1` 262k-token suffix-automaton session drafter (`X-Swizzle-Prediction-Seed-Tokens` header & `swizzle:prediction_seed_tokens_total` metric).
+- **Enterprise Observability & Kubernetes Probes**: Prometheus `/metrics` exposing both `swizzle:*` and `llamacpp:*` namespaces (`swizzle:requests_total`, `swizzle:prediction_seed_tokens_total`, `swizzle:predicted_tokens_seconds`) plus unauthenticated `/health/live` and `/health/ready` probes ([`deploy/k8s/swizzle-enterprise.yaml`](deploy/k8s/swizzle-enterprise.yaml)).
 - **llama.cpp `llama-server` API**: `/completion`, `/tokenize`, `/detokenize`, `/props`, `/slots`
 - **Ollama API**: `/api/chat`, `/api/generate`, `/api/tags`, `/api/ps`, `/api/show`, `/api/version`
 - **Swizzle Ecosystem Integration**: Designed to sit directly behind [`swizzle-gateway`](https://github.com/Swizzle-AI/swizzle-gateway), [`swizzle-router`](https://github.com/Swizzle-AI/swizzle-router), and [`swizzle-python-sdk`](https://github.com/Swizzle-AI/swizzle-python-sdk).

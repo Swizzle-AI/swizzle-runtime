@@ -61,3 +61,20 @@ pub fn decoder<M: Predictor>(model: &M) -> Decoder<Ensemble<Source<M>>> {
     }
     decoder
 }
+
+/// Feeds predicted output tokens (such as an existing file passed via OpenAI's
+/// `prediction` parameter) directly into the decoder's `SessionIndex` suffix
+/// automaton (`RAD-1`) without running a forward pass.
+pub fn seed_prediction<M: Predictor>(
+    decoder: &mut Decoder<Ensemble<Source<M>>>,
+    tokens: &[u32],
+) {
+    if tokens.is_empty() {
+        return;
+    }
+    for source in decoder.drafter.sources_mut() {
+        if let Source::Session(index) = source {
+            index.extend(tokens);
+        }
+    }
+}

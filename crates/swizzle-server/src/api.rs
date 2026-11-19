@@ -156,6 +156,9 @@ pub struct Common {
     mirostat_eta: Option<f32>,
     /// Adds a receipt that reproduces the answer to the response.
     receipt: Option<bool>,
+    /// OpenAI Predicted Outputs (`prediction: {"type": "content", "content": "..."}`)
+    /// for 5x+ RAD-1 speculative code-edit acceleration.
+    prediction: Option<Value>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -184,6 +187,53 @@ impl Common {
 
     pub fn receipt(&self) -> bool {
         self.receipt.unwrap_or(false)
+    }
+
+    /// Extracts reference text from OpenAI's `prediction` parameter:
+    /// - `{"type": "content", "content": "..."}`
+    /// - `{"type": "content", "content": [{"type": "text", "text": "..."}]}`
+    /// - `"..."`
+    pub fn prediction_text(&self) -> Result<Option<String>, ApiError> {
+        let Some(pred) = &self.prediction else {
+            return Ok(None);
+        };
+        match pred {
+            Value::Null => Ok(None),
+            Value::String(s) => Ok(Some(s.clone())),
+            Value::Object(obj) => {
+                if let Some(kind) = obj.get("type").and_then(Value::as_str) {
+                    if kind != "content" {
+                        return Err(ApiError::invalid("prediction.type must be \"content\""));
+                    }
+                }
+                match obj.get("content") {
+                    Some(Value::String(s)) => Ok(Some(s.clone())),
+                    Some(Value::Array(parts)) => {
+                        let mut out = String::new();
+                        for p in parts {
+                            if p.get("type").and_then(Value::as_str) != Some("text") {
+                                return Err(ApiError::invalid(
+                                    "prediction.content parts must have type \"text\"",
+                                ));
+                            }
+                            let Some(t) = p.get("text").and_then(Value::as_str) else {
+                                return Err(ApiError::invalid(
+                                    "prediction.content text part is missing \"text\"",
+                                ));
+                            };
+                            out.push_str(t);
+                        }
+                        Ok(Some(out))
+                    }
+                    _ => Err(ApiError::invalid(
+                        "prediction.content must be a string or an array of text parts",
+                    )),
+                }
+            }
+            _ => Err(ApiError::invalid(
+                "prediction must be an object with type \"content\" or a string",
+            )),
+        }
     }
 
     /// The `grammar` or `response_format` field as sent, for a receipt.
@@ -673,5 +723,42 @@ mod tests {
         let body = ApiError::invalid("bad").body();
         assert_eq!(body["error"]["message"], "bad");
         assert_eq!(body["error"]["type"], "invalid_request_error");
+    }
+
+    #[test]
+    fn parses_openai_predicted_outputs_parameter() {
+        let m = json!([{"role": "user", "content": "Refactor"}]);
+        let obj = chat(json!({
+            "messages": m,
+            "prediction": {"type": "content", "content": "fn main() {}\n"}
+        }));
+        assert_eq!(
+            obj.common.prediction_text().unwrap().as_deref(),
+            Some("fn main() {}\n")
+        );
+
+        let parts = chat(json!({
+            "messages": m,
+            "prediction": {
+                "type": "content",
+                "content": [
+                    {"type": "text", "text": "let a = 1;\n"},
+                    {"type": "text", "text": "let b = 2;\n"}
+                ]
+            }
+        }));
+        assert_eq!(
+            parts.common.prediction_text().unwrap().as_deref(),
+            Some("let a = 1;\nlet b = 2;\n")
+        );
+
+        let raw = chat(json!({"messages": m, "prediction": "inline draft"}));
+        assert_eq!(
+            raw.common.prediction_text().unwrap().as_deref(),
+            Some("inline draft")
+        );
+
+        let bad = chat(json!({"messages": m, "prediction": {"type": "other", "content": "x"}}));
+        assert_eq!(bad.common.prediction_text().unwrap_err().status, 400);
     }
 }

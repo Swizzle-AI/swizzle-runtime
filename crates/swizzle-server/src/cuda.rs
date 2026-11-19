@@ -499,6 +499,11 @@ impl Backend for CudaBackend<'_> {
         self.ahead_of(prompt)
     }
 
+    fn observe_prediction(&mut self, tokens: &[u32]) {
+        drafter::seed_prediction(&mut self.decoder, tokens);
+        self.cpu.observe_prediction(tokens);
+    }
+
     fn backend_name(&self) -> &'static str {
         "cuda"
     }
