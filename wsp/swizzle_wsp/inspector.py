@@ -39,6 +39,7 @@ class DivergentLayerSummary:
     cosine_shift: float
     defect_direction: List[float]  # Unit vector in layer output or weight row space
     top_divergent_channels: List[int]
+    top_input_channels: List[int] = field(default_factory=list)
 
 
 @dataclass
@@ -183,6 +184,8 @@ class WeightInspector:
         passing_batches: Sequence[Any],
         forward_fn: Optional[Callable[[nn.Module, Any], Any]] = None,
         layer_types: Tuple[type, ...] = (nn.Linear,),
+        compute_digests: bool = True,
+        exclude_names: Tuple[str, ...] = (),
     ) -> ContrastiveCircuitReport:
         """
         Records mean activation residuals across Linear modules on failing vs passing
@@ -194,31 +197,43 @@ class WeightInspector:
 
         captured_fail: Dict[str, List[torch.Tensor]] = {}
         captured_pass: Dict[str, List[torch.Tensor]] = {}
+        captured_fail_in: Dict[str, List[torch.Tensor]] = {}
+        captured_pass_in: Dict[str, List[torch.Tensor]] = {}
         target_modules: Dict[str, nn.Module] = {}
 
         for name, mod in model.named_modules():
+            if name in exclude_names:
+                continue
             if isinstance(mod, layer_types) and hasattr(mod, "weight"):
                 target_modules[name] = mod
                 captured_fail[name] = []
                 captured_pass[name] = []
+                captured_fail_in[name] = []
+                captured_pass_in[name] = []
 
-        active_bucket: Dict[str, List[torch.Tensor]] = captured_fail
+        active_out_bucket: Dict[str, List[torch.Tensor]] = captured_fail
+        active_in_bucket: Dict[str, List[torch.Tensor]] = captured_fail_in
 
         def _make_hook(lname: str):
-            def _hook(_mod: nn.Module, _inp: Any, out: Any) -> None:
+            def _hook(_mod: nn.Module, inp: Any, out: Any) -> None:
                 ten = out[0] if isinstance(out, (tuple, list)) else out
                 if isinstance(ten, torch.Tensor):
                     flat = ten.detach().float().cpu().reshape(-1, ten.shape[-1])
-                    active_bucket[lname].append(flat.mean(dim=0))
+                    active_out_bucket[lname].append(flat.mean(dim=0))
+                if isinstance(inp, (tuple, list)) and len(inp) > 0 and isinstance(inp[0], torch.Tensor):
+                    x_ten = inp[0].detach().float().cpu().reshape(-1, inp[0].shape[-1])
+                    active_in_bucket[lname].append(x_ten.mean(dim=0))
 
             return _hook
 
         handles = [mod.register_forward_hook(_make_hook(lname)) for lname, mod in target_modules.items()]
         try:
-            active_bucket = captured_fail
+            active_out_bucket = captured_fail
+            active_in_bucket = captured_fail_in
             for batch in failing_batches:
                 run(model, batch)
-            active_bucket = captured_pass
+            active_out_bucket = captured_pass
+            active_in_bucket = captured_pass_in
             for batch in passing_batches:
                 run(model, batch)
         finally:
@@ -237,6 +252,15 @@ class WeightInspector:
             cos_sim = float(torch.dot(fail_mean, pass_mean).item() / denom)
             unit_dir = (diff / (l2_diff + 1e-12)).tolist()
             top_ch = torch.argsort(diff.abs(), descending=True)[:12].tolist()
+
+            top_in_ch: List[int] = []
+            if captured_fail_in[lname] and captured_pass_in[lname] and mod.weight.ndim >= 2:
+                fin = torch.stack(captured_fail_in[lname], dim=0).mean(dim=0)
+                pin = torch.stack(captured_pass_in[lname], dim=0).mean(dim=0)
+                col_norms = mod.weight.detach().float().norm(dim=0).cpu()
+                attrib = (fin - pin).abs() * col_norms
+                top_in_ch = torch.argsort(attrib, descending=True)[:8].tolist()
+
             w_name = f"{lname}.weight" if lname else "weight"
             divergent.append(
                 DivergentLayerSummary(
@@ -246,12 +270,13 @@ class WeightInspector:
                     cosine_shift=round(1.0 - cos_sim, 6),
                     defect_direction=[round(float(v), 6) for v in unit_dir],
                     top_divergent_channels=[int(c) for c in top_ch],
+                    top_input_channels=[int(c) for c in top_in_ch],
                 )
             )
 
         divergent.sort(key=lambda d: d.activation_l2_diff, reverse=True)
         total_params = sum(int(p.numel()) for p in model.parameters())
-        digests = cls.inspect_state_dict({k: v for k, v in model.state_dict().items()})
+        digests = cls.inspect_state_dict({k: v for k, v in model.state_dict().items()}) if compute_digests else []
         return ContrastiveCircuitReport(
             total_parameters=total_params,
             inspected_layers=len(target_modules),

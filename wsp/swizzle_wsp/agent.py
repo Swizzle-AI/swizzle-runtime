@@ -90,10 +90,12 @@ class WSPControllerAgent:
         patcher: Optional[SurgicalWeightPatcher] = None,
         max_iterations: int = 6,
         llm_propose_fn: Optional[Callable[[Dict[str, Any], int], WSPPatchPlan]] = None,
+        allow_full_direction_fallback: bool = False,
     ):
         self.patcher = patcher or SurgicalWeightPatcher(max_modified_pct=0.50)
         self.max_iterations = max(1, int(max_iterations))
         self.llm_propose_fn = llm_propose_fn
+        self.allow_full_direction_fallback = bool(allow_full_direction_fallback)
 
     def optimize(
         self,
@@ -102,6 +104,7 @@ class WSPControllerAgent:
         failing_batches: Sequence[Any],
         passing_batches: Sequence[Any],
         forward_fn: Optional[Callable[[nn.Module, Any], Any]] = None,
+        exclude_names: tuple[str, ...] = ("lm_head",),
     ) -> WSPOptimizationReport:
         baseline = evaluator.evaluate(model)
         best_eval = baseline
@@ -116,12 +119,16 @@ class WSPControllerAgent:
                 failing_batches=failing_batches,
                 passing_batches=passing_batches,
                 forward_fn=forward_fn,
+                compute_digests=False,
+                exclude_names=exclude_names,
             )
 
             if self.llm_propose_fn is not None:
                 plan = self.llm_propose_fn(circuit.to_prompt_context(), it)
             else:
-                plan = self._propose_spectral_patch(model, circuit, it)
+                plan = self._propose_spectral_patch(
+                    model, circuit, it, allow_full_fallback=self.allow_full_direction_fallback
+                )
                 if plan is None:
                     break
 
@@ -158,6 +165,8 @@ class WSPControllerAgent:
                         reason=f"Improved target {baseline.target_score:.3f}->{after.target_score:.3f}, rep={after.repetition_rate:.3f}",
                     )
                 )
+                if best_eval.target_score >= 0.9999 and best_eval.repetition_rate <= 0.02:
+                    break
             else:
                 self.patcher.rollback_last(model)
                 traces.append(
@@ -186,23 +195,94 @@ class WSPControllerAgent:
         model: nn.Module,
         circuit: ContrastiveCircuitReport,
         iteration: int,
+        allow_full_fallback: bool = False,
     ) -> Optional[WSPPatchPlan]:
         """Generates deterministic spectral surgery candidates from contrastive activations."""
         if not circuit.top_divergent_layers:
             return None
         param_shapes = {k: tuple(v.shape) for k, v in model.named_parameters()}
+        top0 = circuit.top_divergent_layers[0]
+
+        if allow_full_fallback:
+            # Find same-block gating sibling (e.g., up_proj / gate_proj paired with down_proj)
+            block_prefix = top0.layer_name.rsplit(".", 1)[0] if "." in top0.layer_name else ""
+            siblings = [
+                d
+                for d in circuit.top_divergent_layers
+                if block_prefix
+                and d.layer_name.startswith(block_prefix + ".")
+                and d.layer_name != top0.layer_name
+                and d.weight_param_name in param_shapes
+                and len(param_shapes[d.weight_param_name]) >= 2
+                and d.top_divergent_channels
+            ]
+            siblings.sort(key=lambda d: d.cosine_shift, reverse=True)
+
+            if iteration == 0 and top0.weight_param_name in param_shapes:
+                top_ch = top0.top_divergent_channels[:2]
+                rows = top_ch if len(param_shapes[top0.weight_param_name]) >= 2 and param_shapes[top0.weight_param_name][0] > 4 else None
+                return WSPPatchPlan(
+                    hypothesis=f"Sparse defect orthogonalization in {top0.weight_param_name} rows={rows}",
+                    target_issue="defect_orthogonalization",
+                    operations=[
+                        ProjectOrthogonalOp(
+                            tensor=top0.weight_param_name,
+                            direction=top0.defect_direction,
+                            axis="rows",
+                            alpha=1.0,
+                            rows=rows,
+                        )
+                    ],
+                )
+
+            if iteration in (1, 2, 3) and top0.top_input_channels and top0.weight_param_name in param_shapes:
+                in_ch = int(top0.top_input_channels[min(iteration - 1, len(top0.top_input_channels) - 1)])
+                return WSPPatchPlan(
+                    hypothesis=f"Silence highest-attribution input column [{in_ch}] in {top0.weight_param_name}",
+                    target_issue="input_channel_attribution",
+                    operations=[ScaleSliceOp(tensor=top0.weight_param_name, cols=[in_ch], factor=0.0)],
+                )
+
+            if iteration == 4 and siblings:
+                sib = siblings[0]
+                ch_idx = int(sib.top_divergent_channels[0])
+                return WSPPatchPlan(
+                    hypothesis=f"Silence upstream gating channel [{ch_idx}] in {sib.weight_param_name}",
+                    target_issue="sparse_neuron_silencing",
+                    operations=[ScaleSliceOp(tensor=sib.weight_param_name, rows=[ch_idx], factor=0.0)],
+                )
+
+            if iteration == 5 and top0.weight_param_name in param_shapes:
+                return WSPPatchPlan(
+                    hypothesis=f"Full-direction defect orthogonalization in {top0.weight_param_name}",
+                    target_issue="defect_orthogonalization",
+                    operations=[
+                        ProjectOrthogonalOp(
+                            tensor=top0.weight_param_name,
+                            direction=top0.defect_direction,
+                            axis="rows",
+                            alpha=1.0,
+                            rows=None,
+                        )
+                    ],
+                )
+
         layer_idx = min(iteration // 2, len(circuit.top_divergent_layers) - 1)
         target = circuit.top_divergent_layers[layer_idx]
         w_name = target.weight_param_name
         if w_name not in param_shapes:
             return None
 
-        # Candidate cycle: orthogonalize defect direction (rows), partial alpha=0.5, or attenuate top channel
+        # Candidate cycle across top divergent layers: sparse row projection & row scaling
         alpha = 1.0 if iteration % 2 == 0 else 0.5
         top_ch = target.top_divergent_channels[:2]
-        rows = top_ch if len(param_shapes[w_name]) >= 2 and param_shapes[w_name][0] > 4 else None
+        rows = (
+            None
+            if (allow_full_fallback and iteration >= 4)
+            else (top_ch if len(param_shapes[w_name]) >= 2 and param_shapes[w_name][0] > 4 else None)
+        )
 
-        if iteration % 3 == 2 and rows:
+        if iteration % 3 == 2 and rows and len(param_shapes[w_name]) >= 2:
             return WSPPatchPlan(
                 hypothesis=f"Attenuate over-firing loop channels {rows} in {w_name}",
                 target_issue="loop_attenuation",

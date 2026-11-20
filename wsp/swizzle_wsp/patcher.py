@@ -64,7 +64,13 @@ class SurgicalWeightPatcher:
         buf_map: Dict[str, torch.Tensor] = dict(model.named_buffers())
         all_tensors = {**param_map, **buf_map}
         total_params = sum(int(p.numel()) for p in param_map.values())
-        base_hash = _hash_state_dict(all_tensors)
+        op_names = [op.tensor for op in plan.operations if op.tensor in param_map]
+        hash_scope_before = (
+            all_tensors
+            if total_params <= 5_000_000
+            else ({k: param_map[k] for k in op_names} if op_names else {})
+        )
+        base_hash = _hash_state_dict(hash_scope_before)
 
         snapshot: Dict[str, torch.Tensor] = {}
         modified_count = 0
@@ -90,7 +96,12 @@ class SurgicalWeightPatcher:
                     )
 
             self._snapshots.append(snapshot)
-            patched_hash = _hash_state_dict({**dict(model.named_parameters()), **dict(model.named_buffers())})
+            hash_scope_after = (
+                {**dict(model.named_parameters()), **dict(model.named_buffers())}
+                if total_params <= 5_000_000
+                else {k: param_map[k] for k in touched_names}
+            )
+            patched_hash = _hash_state_dict(hash_scope_after)
             return PatchApplicationResult(
                 applied=True,
                 hypothesis=plan.hypothesis,
