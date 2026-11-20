@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swizzle-wsp"
+version = "0.1.0"
+description = "Swizzle Weight-Space Programming (WSP): gradient-free circuit localization, constrained weight Patch DSL, and verifiable .swp receipts"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.24.0",
+    "pydantic>=2.0.0",
+    "torch>=2.0.0",
+    "safetensors>=0.4.0"
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
+[project.scripts]
+swizzle-wsp = "swizzle_wsp.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["swizzle_wsp*"]
