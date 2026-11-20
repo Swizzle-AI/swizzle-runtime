@@ -5,7 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "swizzle-wsp"
 version = "0.1.0"
-description = "Swizzle Weight-Space Programming (WSP): gradient-free circuit localization, constrained weight Patch DSL, and verifiable .swp receipts"
+description = "Swizzle Weight-Space Programming (WSP): gradient-free circuit localization, constrained weight Patch DSL, GPU-poor Q4 healing/serving, and verifiable .swp receipts"
+license = "Apache-2.0"
+authors = [{ name = "Swizzle AI" }]
 requires-python = ">=3.9"
 dependencies = [
     "numpy>=1.24.0",
@@ -14,8 +16,17 @@ dependencies = [
     "safetensors>=0.4.0"
 ]
 
+[project.urls]
+Homepage = "https://github.com/Swizzle-AI/swizzle-runtime/tree/main/wsp"
+Repository = "https://github.com/Swizzle-AI/swizzle-runtime"
+
 [project.optional-dependencies]
-test = ["pytest>=7.0"]
+serve = [
+    "transformers>=4.45.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.30.0",
+]
+test = ["pytest>=7.0", "httpx>=0.27.0"]
 
 [project.scripts]
 swizzle-wsp = "swizzle_wsp.cli:main"
