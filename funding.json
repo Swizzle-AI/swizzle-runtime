@@ -1,0 +1,88 @@
+{
+  "version": "v1.0.0",
+  "entity": {
+    "type": "organisation",
+    "role": "owner",
+    "name": "Swizzle AI",
+    "email": "paramveersingh@swizzle.ai",
+    "phone": "",
+    "description": "Swizzle AI develops open-source, deterministic, bit-exact local LLM and robotics VLA inference infrastructure in Rust, CUDA, and Vulkan under the Apache-2.0 license.",
+    "webpageUrl": {
+      "url": "https://swizzle-ten.vercel.app",
+      "wellKnown": ""
+    }
+  },
+  "projects": [
+    {
+      "guid": "swizzle-runtime",
+      "name": "Swizzle Runtime (swizzle-rt)",
+      "description": "Exact, high-throughput Rust inference engine for GGUF and .ktc models with Swizzle XOR shared-memory CUDA GEMM tiles, cross-vendor Vulkan kernels, zero-copy Shortlist vocabulary screening, RAD-1 speculative decoding, Warm Start prefix caching, and Convoy continuous batching.",
+      "webpageUrl": {
+        "url": "https://github.com/Swizzle-AI/swizzle-runtime",
+        "wellKnown": ""
+      },
+      "repositoryUrl": {
+        "url": "https://github.com/Swizzle-AI/swizzle-runtime",
+        "wellKnown": ""
+      },
+      "licenses": [
+        "spdx:Apache-2.0"
+      ],
+      "tags": [
+        "rust",
+        "llm-inference",
+        "gguf",
+        "cuda",
+        "vulkan",
+        "speculative-decoding",
+        "local-ai",
+        "robotics"
+      ]
+    }
+  ],
+  "funding": {
+    "channels": [
+      {
+        "guid": "github-sponsors",
+        "type": "payment-provider",
+        "address": "https://github.com/sponsors/Paramveersingh-S",
+        "description": "Sponsor Swizzle AI development via GitHub Sponsors."
+      },
+      {
+        "guid": "lfx-crowdfunding",
+        "type": "payment-provider",
+        "address": "https://crowdfunding.lfx.linuxfoundation.org/projects/swizzle-ai",
+        "description": "Support Swizzle AI via Linux Foundation LFX Crowdfunding."
+      }
+    ],
+    "plans": [
+      {
+        "guid": "hardware-ci-and-multi-arch-verification",
+        "status": "active",
+        "name": "Cross-Vendor GPU CI & Deterministic Verification Lab",
+        "description": "Dedicated bare-metal and cloud GPU test runners across NVIDIA (Turing through Blackwell), AMD RDNA, Intel Arc (Vulkan), and ARM64 SBCs to verify bit-exact inference receipts on every commit.",
+        "amount": 15000,
+        "currency": "USD",
+        "frequency": "yearly",
+        "channels": [
+          "github-sponsors",
+          "lfx-crowdfunding"
+        ]
+      },
+      {
+        "guid": "core-runtime-and-robotics-vla",
+        "status": "active",
+        "name": "Core Rust Inference Engine & Real-Time Robotics VLA Milestones",
+        "description": "Full-time engineering on Swizzle XOR CUDA/Vulkan kernels, Shortlist exact vocabulary bounds, RAD-1 ensemble speculative decoding, and sub-15ms robotics VLA control loops.",
+        "amount": 35000,
+        "currency": "USD",
+        "frequency": "yearly",
+        "channels": [
+          "github-sponsors",
+          "lfx-crowdfunding"
+        ]
+      }
+    ],
+    "history": []
+  }
+}
