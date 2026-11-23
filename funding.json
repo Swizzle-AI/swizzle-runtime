@@ -57,7 +57,7 @@
     ],
     "plans": [
       {
-        "guid": "hardware-ci-and-multi-arch-verification",
+        "guid": "hardware-gpu-ci-lab",
         "status": "active",
         "name": "Cross-Vendor GPU CI & Deterministic Verification Lab",
         "description": "Dedicated bare-metal and cloud GPU test runners across NVIDIA (Turing through Blackwell), AMD RDNA, Intel Arc (Vulkan), and ARM64 SBCs to verify bit-exact inference receipts on every commit.",
@@ -70,7 +70,7 @@
         ]
       },
       {
-        "guid": "core-runtime-and-robotics-vla",
+        "guid": "core-runtime-robotics-vla",
         "status": "active",
         "name": "Core Rust Inference Engine & Real-Time Robotics VLA Milestones",
         "description": "Full-time engineering on Swizzle XOR CUDA/Vulkan kernels, Shortlist exact vocabulary bounds, RAD-1 ensemble speculative decoding, and sub-15ms robotics VLA control loops.",
