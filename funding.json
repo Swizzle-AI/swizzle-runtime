@@ -4,7 +4,7 @@
     "type": "organisation",
     "role": "owner",
     "name": "Swizzle AI",
-    "email": "paramveersingh@swizzle.ai",
+    "email": "param15.veer.singh@gmail.com",
     "phone": "",
     "description": "Swizzle AI develops open-source, deterministic, bit-exact local LLM and robotics VLA inference infrastructure in Rust, CUDA, and Vulkan under the Apache-2.0 license.",
     "webpageUrl": {
