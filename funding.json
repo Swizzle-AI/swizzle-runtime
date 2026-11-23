@@ -6,7 +6,7 @@
     "name": "Swizzle AI",
     "email": "param15.veer.singh@gmail.com",
     "phone": "",
-    "description": "Swizzle AI develops open-source, deterministic, bit-exact local LLM and robotics VLA inference infrastructure in Rust, CUDA, and Vulkan under the Apache-2.0 license.",
+    "description": "Indian-origin open-source systems & AI infrastructure organization led by Paramveer Singh (active upstream contributor to AIBrix, CNCF Volcano, Apache CloudStack, and CERN Scikit-HEP). Swizzle AI builds deterministic, bit-exact local LLM and edge robotics inference runtimes in pure Rust, CUDA, and Vulkan under the Apache-2.0 license.",
     "webpageUrl": {
       "url": "https://swizzle-ten.vercel.app",
       "wellKnown": "https://swizzle-ten.vercel.app/.well-known/funding-manifest-urls"
@@ -56,6 +56,19 @@
       }
     ],
     "plans": [
+      {
+        "guid": "foss-united-indian-grant",
+        "status": "active",
+        "name": "FOSS United Project Grant: Cross-Vendor Vulkan Parity, Receipts & Robotics VLA (4 Quarterly Milestones)",
+        "description": "Milestone-based 1-year plan: (Q1) Port TreeSum<K> reductions & Shortlist Cauchy-Schwarz vocabulary screening to Vulkan subgroup shaders (AMD/Intel/ARM GPUs); (Q2) Ship CBOR/JSON-LD cryptographic inference receipts (`swizzle-rt verify-receipt`) & multi-GPU parity CI; (Q3) Integrate 80 Hz deterministic VLA control loops in `swizzle-robotics` for student & edge robotics hardware; (Q4) Quarterly IndiaFOSS talks, forum updates & 'FOSS in Education' student workshops.",
+        "amount": 500000,
+        "currency": "INR",
+        "frequency": "one-time",
+        "channels": [
+          "github-sponsors",
+          "lfx-crowdfunding"
+        ]
+      },
       {
         "guid": "hardware-gpu-ci-lab",
         "status": "active",
