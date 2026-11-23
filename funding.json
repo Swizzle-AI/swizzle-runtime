@@ -18,12 +18,12 @@
       "name": "Swizzle Runtime (swizzle-rt)",
       "description": "Exact, high-throughput Rust inference engine for GGUF and .ktc models with Swizzle XOR shared-memory CUDA GEMM tiles, cross-vendor Vulkan kernels, zero-copy Shortlist vocabulary screening, RAD-1 speculative decoding, Warm Start prefix caching, and Convoy continuous batching.",
       "webpageUrl": {
-        "url": "https://github.com/Swizzle-AI/swizzle-runtime",
+        "url": "https://swizzle-ten.vercel.app",
         "wellKnown": "https://swizzle-ten.vercel.app/.well-known/funding-manifest-urls"
       },
       "repositoryUrl": {
         "url": "https://github.com/Swizzle-AI/swizzle-runtime",
-        "wellKnown": "https://raw.githubusercontent.com/Swizzle-AI/swizzle-runtime/main/.well-known/funding-manifest-urls"
+        "wellKnown": "https://github.com/Swizzle-AI/swizzle-runtime/raw/main/.well-known/funding-manifest-urls"
       },
       "licenses": [
         "spdx:Apache-2.0"
