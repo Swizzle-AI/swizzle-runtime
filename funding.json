@@ -9,7 +9,7 @@
     "description": "Swizzle AI develops open-source, deterministic, bit-exact local LLM and robotics VLA inference infrastructure in Rust, CUDA, and Vulkan under the Apache-2.0 license.",
     "webpageUrl": {
       "url": "https://swizzle-ten.vercel.app",
-      "wellKnown": ""
+      "wellKnown": "https://swizzle-ten.vercel.app/.well-known/funding-manifest-urls"
     }
   },
   "projects": [
@@ -19,11 +19,11 @@
       "description": "Exact, high-throughput Rust inference engine for GGUF and .ktc models with Swizzle XOR shared-memory CUDA GEMM tiles, cross-vendor Vulkan kernels, zero-copy Shortlist vocabulary screening, RAD-1 speculative decoding, Warm Start prefix caching, and Convoy continuous batching.",
       "webpageUrl": {
         "url": "https://github.com/Swizzle-AI/swizzle-runtime",
-        "wellKnown": ""
+        "wellKnown": "https://swizzle-ten.vercel.app/.well-known/funding-manifest-urls"
       },
       "repositoryUrl": {
         "url": "https://github.com/Swizzle-AI/swizzle-runtime",
-        "wellKnown": ""
+        "wellKnown": "https://raw.githubusercontent.com/Swizzle-AI/swizzle-runtime/main/.well-known/funding-manifest-urls"
       },
       "licenses": [
         "spdx:Apache-2.0"
